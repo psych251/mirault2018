@@ -10,15 +10,15 @@ output:
       collapsed: false
 ---
 
-<!-- Replication reports should all use this template to standardize reporting across projects.  These reports will be public supplementary materials that accompany the summary report(s) of the aggregate results. -->
+<!--Replication reports should all use this template to standardize reporting across projects.  These reports will be public supplementary materials that accompany the summary report(s) of the aggregate results.-->
 
 ## Introduction
 
-<!-- [No abstract is needed.]  Each replication project will have a straightforward, no frills report of the study and results.  These reports will be publicly available as supplementary material for the aggregate report(s) of the project as a whole.  Also, to maximize project integrity, the intro and methods will be written and critiqued in advance of data collection.  Introductions can be just 1-2 paragraphs clarifying the main idea of the original study, the target finding for replication, and any other essential information.  It will NOT have a literature review -- that is in the original publication. You can write both the introduction and the methods in past tense. -->
+<!--[No abstract is needed.]  Each replication project will have a straightforward, no frills report of the study and results.  These reports will be publicly available as supplementary material for the aggregate report(s) of the project as a whole.  Also, to maximize project integrity, the intro and methods will be written and critiqued in advance of data collection.  Introductions can be just 1-2 paragraphs clarifying the main idea of the original study, the target finding for replication, and any other essential information.  It will NOT have a literature review -- that is in the original publication. You can write both the introduction and the methods in past tense.-->
 
 In their paper, [Mirault et al. (2018)](https://github.com/psych251/mirault2018/blob/main/original_paper/mirault2018.pdf) demonstrate a novel transposed word effect in speeded sentence grammaticality judgments. They constructed base sentences that were either grammatical or ungrammatical, and then derived test sentences from them by transposing two words, finding that ungrammaticality judgments for transposed word sentences required longer reaction times and had higher error rates when the base sentences were grammatical. The authors suggested that these results demonstrate some uncertainty in word order encoding as well as parallel processing of words. 
 
-This transposed word effect has important implications in psycholinguistics, particularly regarding models of sentence processing and grammar. Furthermore, since the effect is a relatively novel phenomenon, it should be verified through replications and reproductions in order to demonstrate its robustness. In particular, the original study was conducted in French, which has agreement (in person, number, and gender) among verbs, articles, adjectives, and nouns. This contrasts with English, which has much more limited agreement (only between subjects and verbs). Replicating the effect in English would thus demonstrate that the effect is not solely due to the particular agreement characteristics of French, but can generalise across languages.
+This transposed word effect has important implications in psycholinguistics, particularly regarding models of sentence processing and grammar. Furthermore, since the effect is a relatively novel phenomenon, it should be verified through replications and reproductions in order to demonstrate its robustness. In particular, the original study was conducted in French, which has agreement (in person, number, and gender) among verbs, articles, adjectives, and nouns. This contrasts with English, which has much more limited agreement (only between subjects and verbs). Additionally, French has certain word orders which are much less common or not possible in English (e.g. adjectives after nouns, direct object before verb). Replicating the effect in English would thus demonstrate that the effect is not solely due to the particular agreement or word order characteristics of French, but can generalise across languages.
 
 The materials needed to replicate this study include the test sentences (which serve as stimuli for the speeded grammaticality judgment task), as well as the specific instructions given to participants. The former are available on the paper's [OSF site](https://osf.io/mvz3r/); however, the latter will have to be obtained by communicating with the authors. The original experiment was conducted online using Java, and a similar implementation (using JavaScript) on a crowdsourcing platform will be adopted for the replication study. 
 
@@ -30,39 +30,99 @@ The repository for this project is hosted on [GitHub](https://github.com/psych25
 
 ### Power Analysis
 
-Original effect size, power analysis for samples to achieve 80%, 90%, 95% power to detect that effect size.  Considerations of feasibility for selecting planned sample size.
+<!--Original effect size, power analysis for samples to achieve 80%, 90%, 95% power to detect that effect size.  Considerations of feasibility for selecting planned sample size.-->
 
 ### Planned Sample
 
-Planned sample size and/or termination rule, sampling frame, known demographics if any, preselection rules if any.
+<!--Planned sample size and/or termination rule, sampling frame, known demographics if any, preselection rules if any.-->
 
 ### Materials
 
-All materials - can quote directly from original article - just put the text in quotations and note that this was followed precisely.  Or, quote directly and just point out exceptions to what was described in the original article.
+<!--All materials - can quote directly from original article - just put the text in quotations and note that this was followed precisely.  Or, quote directly and just point out exceptions to what was described in the original article.-->
+
+As the present replication involves a different language from the original study, new stimuli were created in English according to the specifications of the original study. Pairs of five-word grammatical base sentences were constructed, largely using translated lexical items from the original French, modifying where necessary to avoid semantic oddity, to minimize repetitions of lexical items, and to produce sentences that were amenable to the subsequent manipulations. The last words of each pair were then swapped to produce corresponding pairs of ungrammatical base sentences. Finally, the third and fourth words of each base sentence were transposed to form the test sequences, such that the transposed words were of different grammatical categories. Following the original authors, I will refer to the two conditions as the transposed-word condition (derived from a grammatical base sentence) and the control condition (derived from an ungrammatical base sentence). These are illustrated in Table 1.
+
+<center>
+
+*Table 1.* Examples of base sentences and test sequences
+
+</center>
+
+```{r table1, echo=FALSE, message=FALSE, warnings=FALSE, results='asis'}
+# table solution taken from https://stackoverflow.com/questions/19997242/simple-manual-rmarkdown-tables-that-look-good-in-html-pdf-and-docx
+
+examples <- "
+| Sequence           | Example                          |
+|--------------------|----------------------------------|
+| Base               |                                  |
+| -  Grammatical     | You should really leave now.     |
+|                    | Her handsome neighbor is moving. |
+| -  Ungrammatical   | You should really leave moving.  |
+|                    | Her handsome neighbor is now.    |
+| Test               |                                  |
+| -  Transposed-word | You should leave really now.     |
+|                    | Her handsome is neighbor moving. |
+| -  Control         | You should leave really moving.  |
+|                    | Her handsome is neighbor now.    |
+"
+cat(examples) 
+```
+
+The remainder of the stimulus construction followed the original study: 160 ungrammatical test sequences were constructed from 80 grammatical and 80 ungrammatical base sentences. These were distributed into two lists, such that participants only saw half of each type of test sequence, and did not experience "repetition of sequences containing the same words". Additionally, "each participant also saw 80 grammatically correct sentences that were not related in any way to the base sequences used to generate the ungrammatical test sequences." 
+
+The full set of English stimuli can be found [here](https://github.com/psych251/mirault2018/blob/main/experiment/stimuli.csv). In this file, items 1--40 have transposed-word sequences in List 1 and control sequences in List 2, items 41--80 have control sequences in List 1 and transposed-word sequences in List 2, and items 81--160 are grammatically correct sentences identical in both lists.
 
 ### Procedure	
 
-Can quote directly from original article - just put the text in quotations and note that this was followed precisely.  Or, quote directly and just point out exceptions to what was described in the original article.
+<!--Can quote directly from original article - just put the text in quotations and note that this was followed precisely.  Or, quote directly and just point out exceptions to what was described in the original article.-->
+
+The procedure from the original paper was followed closely: "Participants were instructed to decide as rapidly and as accurately as possible whether the sequence of words was grammatically correct. On each trial, a fixation cross was displayed on the center of the screen during a random time ranging between 500 and 700 ms, followed by the stimulus (a five-word sequence) centered on the screen. The distance between the central fixation cross and the first letter of the sequence varied between 8° and 18° of visual angle as a function of the length of the five-word sequence. The word sequence remained on screen until response. After this, a feedback dot was presented for 700 ms, in green if the response was correct or in red if the response was incorrect."
+
+Additional detail regarding online presentation was as follows: "Stimuli were presented online using Java protocol on the personal computer of the participant. Sentences were presented in 30-point mono-spaced font (Droid Sans Mono) in black on a white background. Participants were asked to sit about 60 cm from the monitor, such that 1 cm equaled approximately 1° of visual angle. Participants responded using their index fingers with two arrows on the computer keyboard: right for grammatical decisions and left for ungrammatical decisions."
+
+The only deviation from the abovementioned procedure is that the experiment was coded using JavaScript (relying on the jsPsych library) instead of Java, but this is unlikely to have resulted in any substantial difference in the results.
 
 ### Analysis Plan
 
-Can also quote directly, though it is less often spelled out effectively for an analysis strategy section.  The key is to report an analysis strategy that is as close to the original - data cleaning rules, data exclusion rules, covariates, etc. - as possible.  
+<!--Can also quote directly, though it is less often spelled out effectively for an analysis strategy section.  The key is to report an analysis strategy that is as close to the original - data cleaning rules, data exclusion rules, covariates, etc. - as possible.-->
 
-**Clarify key analysis of interest here**  You can also pre-specify additional analyses you plan to do.
+As with the original paper, "response times (RT; the time between onset of stimulus presentation and participant’s response) for correct responses and response accuracy" were analyzed. Similarly, prior to analysis, RTs were also inverse-transformed (-1000/RT) to normalize the distribution. 
+
+#### Exclusion criteria
+
+The exclusion criteria used in the original paper were:
+
+1. Low overall accuracy (no specific cutoff), and
+2. RTs beyond 2.5 standard deviations from the grand mean.
+
+These were adopted for the present replication, with an accuracy cutoff specified at 50% (i.e. at chance), such that participants who performed worse than chance were excluded.
+
+<!--**Clarify key analysis of interest here**  You can also pre-specify additional analyses you plan to do.-->
+
+#### Key analyses of interest
+
+The key analyses of the original paper were:
+
+1. Linear mixed-effects (LME) model to analyze RTs, and
+2. Generalized (logistic) linear mixed-effects (GLME) model to analyze accuracy.
+
+These effects were considered to be reliable if |*t*| (for LME) or |*z*| (for GLME) were greater than 1.96. Furthermore, the original authors "used the maximal random structure model that converged ..., and this included by-participant and by-item random intercepts in all analyses". These analyses were also adopted for the present replication.
 
 ### Differences from Original Study
 
-Explicitly describe known differences in sample, setting, procedure, and analysis plan from original study.  The goal, of course, is to minimize those differences, but differences will inevitably occur.  Also, note whether such differences are anticipated to make a difference based on claims in the original article or subsequent published research on the conditions for obtaining the effect.
+<!--Explicitly describe known differences in sample, setting, procedure, and analysis plan from original study.  The goal, of course, is to minimize those differences, but differences will inevitably occur.  Also, note whether such differences are anticipated to make a difference based on claims in the original article or subsequent published research on the conditions for obtaining the effect.-->
 
-### Methods Addendum (Post Data Collection)
+In summary, two key methodological differences exist between the original study and the present replication. These are the recruitment of participants on MTurk (instead of volunteers), and the use of novel English stimuli (instead of the original French). The former may influence the results to a small extent due to motivation differences, but it is unlikely to result in a significant change in the result, considering that the study involves a response time task. The latter, however, is much more likely to affect the result. Whether the present replication succeeds or fails would thus depend strongly on whether the transposed-word effect is generalizable to English.
 
-You can comment this section out prior to final report with data collection.
+<!--### Methods Addendum (Post Data Collection)
+
+You can comment this section out prior to final report with data collection.-->
 
 #### Actual Sample
-  Sample size, demographics, data exclusions based on rules spelled out in analysis plan
+<!--Sample size, demographics, data exclusions based on rules spelled out in analysis plan-->
 
 #### Differences from pre-data collection methods plan
-  Any differences from what was described as the original plan, or “none”.
+<!--Any differences from what was described as the original plan, or “none”.-->
 
 
 ## Results
@@ -70,7 +130,7 @@ You can comment this section out prior to final report with data collection.
 
 ### Data preparation
 
-Data preparation following the analysis plan.
+<!--Data preparation following the analysis plan.-->
 	
 ```{r include=F}
 ### Data Preparation
@@ -86,20 +146,20 @@ Data preparation following the analysis plan.
 
 ### Confirmatory analysis
 
-The analyses as specified in the analysis plan.  
+<!--The analyses as specified in the analysis plan.
 
-*Side-by-side graph with original graph is ideal here*
+*Side-by-side graph with original graph is ideal here*-->
 
 ### Exploratory analyses
 
-Any follow-up analyses desired (not required).  
+<!--Any follow-up analyses desired (not required).-->
 
 ## Discussion
 
 ### Summary of Replication Attempt
 
-Open the discussion section with a paragraph summarizing the primary result from the confirmatory analysis and the assessment of whether it replicated, partially replicated, or failed to replicate the original result.  
+<!--Open the discussion section with a paragraph summarizing the primary result from the confirmatory analysis and the assessment of whether it replicated, partially replicated, or failed to replicate the original result.--> 
 
 ### Commentary
 
-Add open-ended commentary (if any) reflecting (a) insights from follow-up exploratory analysis, (b) assessment of the meaning of the replication (or not) - e.g., for a failure to replicate, are the differences between original and present study ones that definitely, plausibly, or are unlikely to have been moderators of the result, and (c) discussion of any objections or challenges raised by the current and original authors about the replication attempt.  None of these need to be long.
+<!--Add open-ended commentary (if any) reflecting (a) insights from follow-up exploratory analysis, (b) assessment of the meaning of the replication (or not) - e.g., for a failure to replicate, are the differences between original and present study ones that definitely, plausibly, or are unlikely to have been moderators of the result, and (c) discussion of any objections or challenges raised by the current and original authors about the replication attempt.  None of these need to be long.-->
