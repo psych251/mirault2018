@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.12.4/jquery.min.js"></script>
+  <script src="stimuli.js"></script>
+  <script src="jspsych/jspsych.js"></script>
+  <script src="jspsych/plugins/jspsych-html-keyboard-response.js"></script>
+
+  <link rel="stylesheet" href="jspsych/css/jspsych.css"></link>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto+Mono&display=swap"></link>
+
+  <style>
+    body {
+      background-color: #c0c0c0;
+    }
+
+    .stimulus {
+      font-size: 30px;
+      font-family: 'Roboto Mono', monospace;
+      color: #ffffff;
+    }
+
+    .uid {
+      font-family: 'Roboto Mono', monospace;
+      color: blue;
+    }
+  </style>
+</head>
+
+<body>
+</body>
+
+<script>
+  var timeline = [];
+
+  var consent = {
+        type: 'html-keyboard-response',
+        stimulus: "By answering the following questions, you are participating in a "+
+            "study being performed by cognitive scientists in the Stanford "+
+            "Department of Psychology. If you have questions about this "+
+            "research, please contact us at <a href=\"mailto:stanfordpsych251@gmail.com\"> "+
+            "stanfordpsych251@gmail.com</a>. You must be at least 18 years "+
+            "old to participate, and you must be a native English speaker "+
+            "and have normal or corrected-to-normal vision. Your "+
+            "participation in this research is voluntary. You may decline "+
+            "to answer any or all of the following questions. You may "+
+            "decline further participation, at any time, without adverse "+
+            "consequences. Your anonymity is assured; the researchers who "+
+            "have requested your participation will not receive any personal "+
+            "information about you. We have recently been made aware that your "+
+            "public Amazon.com profile can be accessed via your worker ID if "+
+            "you do not choose to opt out. If you would like to opt out of "+
+            "this feature, you may follow instructions available "+
+            "<a href=\"http://www.amazon.com/gp/help/customer/display.html?nodeId=16465241\">here</a>. "+
+            "<br /><br />"+
+            "\[Press spacebar to continue.\]",
+        choices: [' '],
+        post_trial_gap: 0
+  }
+  timeline.push(consent);
+
+  var instructions = {
+      type: 'html-keyboard-response',
+      stimulus: "Each screen will show a sequence of five English words, which "+
+          "either form a grammatical English sentence (e.g. \"The cow "+
+          "eats the grass\") or an ungrammatical sequence (e.g. \"Planet "+
+          "orange a the mention\"). Decide as rapidly and as accurately "+
+          "as possible if the sequence of words forms a grammatically "+
+          "correct sentence or not. Press the right arrow key with your right "+
+          "index finger if the sequence is grammatical, and press the left arrow "+
+          "key with your left index finger if the sequence is ungrammatical. A "+
+          "colored dot will then appear, indicating whether your response was "+
+          "correct (green) or incorrect (red).<br /><br />"+
+          "Please sit about 60cm away from your screen, and display the task "+
+          "in full screen. This HIT takes around 10 minutes to complete; please "+
+          "complete it in one sitting. <br /><br />"+
+          "\[Press spacebar to continue.\]",
+      choices: [' '],
+      post_trial_gap: 0
+  }
+  timeline.push(instructions);
+
+  var list_num = Math.floor(1 + (2 * Math.random()));
+  var this_stimuli = stimuli.filter(stimulus => stimulus.list == list_num);
+
+  function get_random_dur() {
+    return Math.floor(500 + (200 * Math.random()));
+  }
+
+  var trials = {
+    timeline_variables: this_stimuli,
+    randomize_order: true,
+    timeline: [
+      {
+        type: 'html-keyboard-response',
+        stimulus: '<p class="stimulus">+</p>',
+        choices: jsPsych.NO_KEYS,
+        trial_duration: get_random_dur(),
+        post_trial_gap: 0
+      },
+      {
+        type: 'html-keyboard-response',
+        stimulus: function(){ return "<p class='stimulus'>" +
+          jsPsych.timelineVariable('sequence', true) + "</p>"; },
+        choices: [37, 39],
+        post_trial_gap: 0,
+        data: {
+          condition: jsPsych.timelineVariable('condition')
+        },
+        on_finish: function(data){
+          if(data.condition == 'gram') {
+            var correct = data.key_press == 39; // right
+          } else {
+            var correct = data.key_press == 37; // left
+          }
+          data.correct = correct;
+        }
+      },
+      {
+        type: 'html-keyboard-response',
+        stimulus: function(){
+          var lastCorrect = jsPsych.data.get().last(1).values()[0].correct;
+          if(lastCorrect) {
+            return '<svg width="40" height="40"><circle \
+          cx="20" cy="20" r="20" fill="green" /></svg>'
+          } else {
+            return '<svg width="40" height="40"><circle \
+          cx="20" cy="20" r="20" fill="red" /></svg>'
+          }
+        },
+        choices: jsPsych.NO_KEYS,
+        trial_duration: 2000
+      }
+    ]
+  }
+  timeline.push(trials);
+
+  function save_data(filename, filedata){
+      var xhr = new XMLHttpRequest();
+      xhr.open('POST', 'https://web.stanford.edu/~tanawm/cgi-bin/mirault2018/save_data.php');
+      xhr.setRequestHeader('Content-Type', 'application/json');
+      xhr.send(JSON.stringify({filename: filename, filedata: filedata}));
+  }
+
+  var debrief = {
+    type: 'html-keyboard-response',
+    choices: jsPsych.NO_KEYS,
+    stimulus: function(){
+      jsPsych.data.addProperties({
+        timestamp: Date.now()
+      })
+      var last_trial = jsPsych.data.get().last(1).values()[0];
+      save_data('mirault2018/uid.json', last_trial.uid + '\n');
+      save_data('mirault2018/' + last_trial.uid + '_' + last_trial.timestamp + '.csv',
+                jsPsych.data.get().csv());
+      var message = "Thank you for completing this HIT! <br /><br />"+
+        "Your responses are being saved. Please close this page after "+
+        "you copy the code below and submit the HIT. <br /><br />"+
+        "Your completion code is <span class=\"uid\">" + last_trial.uid + "</span>. Please return to the "+
+        "MTurk HIT page to past this code and submit the HIT. Your "+
+        "completion payment will be processed within the next 15 hours.";
+      return message;
+    }
+  }
+  timeline.push(debrief);
+
+  var start_exp = function() {
+    $(window).bind('beforeunload', function(){
+         return "Are you sure you want to leave? Your data may not be recorded.";
+    });
+
+    var turk_info = jsPsych.turk.turkInfo();
+    var worker_id = turk_info.workerId;
+    var uid = jsPsych.randomization.randomID(10);
+
+    jsPsych.data.addProperties({
+        participant: worker_id,
+        uid: uid,
+        list: list_num
+    });
+
+    jsPsych.init({
+      timeline: timeline,
+    })
+  }
+
+  start_exp();
+</script>
+
+</html>
