@@ -138,9 +138,13 @@
 
   function save_data(filename, filedata){
       var xhr = new XMLHttpRequest();
-      xhr.open('POST', 'https://web.stanford.edu/~tanawm/cgi-bin/mirault2018/save_data.php');
+      xhr.open('POST', 'https://web.stanford.edu/~tanawm/cgi-bin/save_data.php');
       xhr.setRequestHeader('Content-Type', 'application/json');
       xhr.send(JSON.stringify({filename: filename, filedata: filedata}));
+  }
+
+  var warning = function() {
+    return "Are you sure you want to leave? Your data may not be recorded.";
   }
 
   var debrief = {
@@ -154,6 +158,7 @@
       save_data('mirault2018/uid.json', last_trial.uid + '\n');
       save_data('mirault2018/' + last_trial.uid + '_' + last_trial.timestamp + '.csv',
                 jsPsych.data.get().csv());
+      $(window).off('beforeunload', warning);
       var message = "Thank you for completing this HIT! <br /><br />"+
         "Your responses are being saved. Please close this page after "+
         "you copy the code below and submit the HIT. <br /><br />"+
@@ -166,9 +171,7 @@
   timeline.push(debrief);
 
   var start_exp = function() {
-    $(window).bind('beforeunload', function(){
-         return "Are you sure you want to leave? Your data may not be recorded.";
-    });
+    $(window).on('beforeunload', warning);
 
     var turk_info = jsPsych.turk.turkInfo();
     var worker_id = turk_info.workerId;
