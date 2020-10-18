@@ -48,7 +48,7 @@ As the present replication involves a different language from the original study
 
 </center>
 
-```{r table1, echo=FALSE, message=FALSE, warnings=FALSE, results='asis'}
+```{r "table1", echo=FALSE, message=FALSE, warnings=FALSE, results='asis'}
 # table solution taken from https://stackoverflow.com/questions/19997242/simple-manual-rmarkdown-tables-that-look-good-in-html-pdf-and-docx
 
 examples <- "
@@ -81,6 +81,8 @@ The procedure from the original paper was followed closely: "Participants were i
 Additional detail regarding online presentation was as follows: "Stimuli were presented online using Java protocol on the personal computer of the participant. Sentences were presented in 30-point mono-spaced font (Droid Sans Mono) in black on a white background. Participants were asked to sit about 60 cm from the monitor, such that 1 cm equaled approximately 1° of visual angle. Participants responded using their index fingers with two arrows on the computer keyboard: right for grammatical decisions and left for ungrammatical decisions."
 
 The only deviation from the abovementioned procedure is that the experiment was coded using JavaScript (relying on the jsPsych library) instead of Java, but this is unlikely to have resulted in any substantial difference in the results.
+
+The experiment can be found [here](https://web.stanford.edu/~tanawm/mirault2018/experiment.html), and the code for the experiment can be found [here](https://github.com/psych251/mirault2018/blob/main/experiment/experiment.html).
 
 ### Analysis Plan
 
@@ -131,24 +133,90 @@ You can comment this section out prior to final report with data collection.-->
 ### Data preparation
 
 <!--Data preparation following the analysis plan.-->
-	
-```{r include=F}
+The data are first prepared by extracting the relevant trials and implementing the exclusion criteria.
+
+```{r "library config", cache = FALSE, include = FALSE}
+require(knitr)
+data_dir <- "~/Documents/.../data/"
+opts_knit$set(root.dir = data_dir)
+
+#### Load relevant libraries
+require(lme4)
+require(tidyverse)
+require(magrittr)
+```
+
+```{r "data prep"}
 ### Data Preparation
 
-####Load Relevant Libraries and Functions
+#### Import data
+files <- grep(".csv$", list.files(), value = TRUE)
 
-####Import data
+full_data_df <- data.frame()
+full_data_list <- list()
 
-#### Data exclusion / filtering
+for (file_no in seq_along(files)) {
+  new_data_df <- read.csv(files[file_no])
+  full_data_list[[file_no]] <- new_data_df
+}
+full_data_df <- bind_rows(full_data_list) 
 
-#### Prepare data for analysis - create columns etc.
+#### Filter trial data
+full_data_df %<>% 
+  filter(grepl("<p class='stimulus'>", .$stimulus, perl = TRUE))
+
+full_data_df$stimulus %<>%
+  sub("<p class='stimulus'>", "", ., perl = TRUE) %>%
+  sub("</p>", "", ., perl = TRUE)
+
+#### Convert data into correct format
+full_data_df$uid <- as_factor(full_data_df$uid)
+full_data_df$rt <- as.numeric(full_data_df$rt)
+full_data_df$correct <- as.logical(full_data_df$correct)
+full_data_df$condition <- as_factor(full_data_df$condition)
+full_data_df$stimulus <- as_factor(full_data_df$stimulus)
+
+#### Data exclusion
+summary_tbl <- full_data_df %>% 
+  group_by(uid) %>%
+  summarise(avg_rt = mean(rt, na.rm = TRUE), accuracy = mean(correct, na.rm = TRUE), 
+            .groups = 'drop')
+
+summary_tbl %<>%
+  mutate(acc_exclude = (accuracy < 0.5)) %>%
+  mutate(rt_z = scale(avg_rt)) %>%
+  mutate(rt_exclude = (abs(rt_z) > 2.5))
+
+summary_tbl_exclude <- summary_tbl %>%
+  filter(acc_exclude == TRUE | rt_exclude == TRUE)
+
+full_data_df_filtered <- full_data_df %>%
+  filter(!(uid %in% summary_tbl_exclude$uid))
 ```
 
 ### Confirmatory analysis
 
-<!--The analyses as specified in the analysis plan.
+<!--The analyses as specified in the analysis plan.-->
+An LME was then used to analyse the RT data, and a GLME was used to analyse the accuracy data.
 
-*Side-by-side graph with original graph is ideal here*-->
+```{r "confirm analysis"}
+### Confirmatory analysis
+
+#### RT LME
+rt_model <- lmer((-1000 / rt) ~ condition + (1|stimulus) + (1|uid),
+                 data = full_data_df_filtered)
+
+summary(rt_model)
+
+#### Accuracy GLME
+accuracy_model <- glmer((1 - correct) ~ condition + (1|stimulus) + (1|uid),
+                        data = full_data_df_filtered, family = 'binomial')
+
+summary(accuracy_model)
+
+```
+
+<!--*Side-by-side graph with original graph is ideal here*-->
 
 ### Exploratory analyses
 
