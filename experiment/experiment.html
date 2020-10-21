@@ -117,7 +117,8 @@
           post_trial_gap: 0,
           data: {
             condition: jsPsych.timelineVariable('condition'),
-            block: i
+            block: i,
+            item_no: item_no
           },
           on_finish: function(data){
             if(data.condition == 'gram') {
