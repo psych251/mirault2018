@@ -6,6 +6,7 @@
   <script src="stimuli.js"></script>
   <script src="jspsych/jspsych.js"></script>
   <script src="jspsych/plugins/jspsych-html-keyboard-response.js"></script>
+  <script src="jspsych/plugins/jspsych-survey-html-form.js"></script>
 
   <link rel="stylesheet" href="jspsych/css/jspsych.css"></link>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto+Mono&display=swap"></link>
@@ -67,74 +68,109 @@
           "eats the grass\") or an ungrammatical sequence (e.g. \"Planet "+
           "orange a the mention\"). Decide as rapidly and as accurately "+
           "as possible if the sequence of words forms a grammatically "+
-          "correct sentence or not. Press the right arrow key with your right "+
-          "index finger if the sequence is grammatical, and press the left arrow "+
+          "correct sentence or not. Press the 'J' key with your right "+
+          "index finger if the sequence is grammatical, and press the 'F' "+
           "key with your left index finger if the sequence is ungrammatical. A "+
           "colored dot will then appear, indicating whether your response was "+
           "correct (green) or incorrect (red).<br /><br />"+
+          "There will be two practice sequences, followed by four blocks of test "+
+          "sequences."+
           "Please sit about 60cm away from your screen, and display the task "+
           "in full screen. This HIT takes around 10 minutes to complete; please "+
           "complete it in one sitting. <br /><br />"+
-          "\[Press spacebar to continue.\]",
+          "\[Press spacebar to begin the practice.\]",
       choices: [' '],
       post_trial_gap: 0
   }
   timeline.push(instructions);
 
   var list_num = Math.floor(1 + (2 * Math.random()));
-  var this_stimuli = stimuli.filter(stimulus => stimulus.list == list_num);
+  var this_list_stimuli = stimuli.filter(stimulus => stimulus.list == list_num);
+  var group_order = [0].concat(jsPsych.randomization.shuffle([1, 2, 3, 4]));
+  var stimuli_blocks = [];
+  for (group_no in group_order) {
+    var this_group_stimuli = this_list_stimuli.filter(stimulus => stimulus.group == group_no);
+    stimuli_blocks.push(this_group_stimuli);
+  }
 
   function get_random_dur() {
     return Math.floor(500 + (200 * Math.random()));
   }
 
-  var trials = {
-    timeline_variables: this_stimuli,
-    randomize_order: true,
-    timeline: [
-      {
-        type: 'html-keyboard-response',
-        stimulus: '<p class="stimulus">+</p>',
-        choices: jsPsych.NO_KEYS,
-        trial_duration: get_random_dur(),
-        post_trial_gap: 0
-      },
-      {
-        type: 'html-keyboard-response',
-        stimulus: function(){ return "<p class='stimulus'>" +
-          jsPsych.timelineVariable('sequence', true) + "</p>"; },
-        choices: [37, 39],
-        post_trial_gap: 0,
-        data: {
-          condition: jsPsych.timelineVariable('condition')
+  for (i = 0; i < 5; i++) {
+    var trials = {
+      timeline_variables: stimuli_blocks[i],
+      randomize_order: true,
+      timeline: [
+        {
+          type: 'html-keyboard-response',
+          stimulus: '<p class="stimulus">+</p>',
+          choices: jsPsych.NO_KEYS,
+          trial_duration: get_random_dur(),
+          post_trial_gap: 0
         },
-        on_finish: function(data){
-          if(data.condition == 'gram') {
-            var correct = data.key_press == 39; // right
-          } else {
-            var correct = data.key_press == 37; // left
+        {
+          type: 'html-keyboard-response',
+          stimulus: function(){ return "<p class='stimulus'>" +
+            jsPsych.timelineVariable('sequence', true) + "</p>"; },
+          choices: ['F', 'J'],
+          post_trial_gap: 0,
+          data: {
+            condition: jsPsych.timelineVariable('condition'),
+            block: i
+          },
+          on_finish: function(data){
+            if(data.condition == 'gram') {
+              var correct = data.key_press == 74; // J
+            } else {
+              var correct = data.key_press == 70; // F
+            }
+            data.correct = correct;
           }
-          data.correct = correct;
+        },
+        {
+          type: 'html-keyboard-response',
+          stimulus: function(){
+            var lastCorrect = jsPsych.data.get().last(1).values()[0].correct;
+            if(lastCorrect) {
+              return '<svg width="40" height="40"><circle \
+            cx="20" cy="20" r="20" fill="green" /></svg>'
+            } else {
+              return '<svg width="40" height="40"><circle \
+            cx="20" cy="20" r="20" fill="red" /></svg>'
+            }
+          },
+          choices: jsPsych.NO_KEYS,
+          trial_duration: 2000
         }
-      },
-      {
-        type: 'html-keyboard-response',
-        stimulus: function(){
-          var lastCorrect = jsPsych.data.get().last(1).values()[0].correct;
-          if(lastCorrect) {
-            return '<svg width="40" height="40"><circle \
-          cx="20" cy="20" r="20" fill="green" /></svg>'
-          } else {
-            return '<svg width="40" height="40"><circle \
-          cx="20" cy="20" r="20" fill="red" /></svg>'
-          }
-        },
-        choices: jsPsych.NO_KEYS,
-        trial_duration: 2000
+      ]
+    }
+    timeline.push(trials);
+
+    if (i == 0) {
+      var post_practice = {
+          type: 'html-keyboard-response',
+          stimulus: "You have completed the practice. You will now begin the "+
+              "experiment proper, which is composed of four blocks of sequences."+
+              "<br /><br />"+
+              "\[Press spacebar to begin the experiment.\]",
+          choices: [' '],
+          post_trial_gap: 0
       }
-    ]
+      timeline.push(post_practice);
+    } else if (i < 4) {
+      var post_block = {
+          type: 'html-keyboard-response',
+          stimulus: "You have completed block " + i + " of 4. You can take a short "+
+              "pause before continuing; press spacebar when you are ready to continue."+
+              "<br /><br />"+
+              "\[Press spacebar to begin the next block.\]",
+          choices: [' '],
+          post_trial_gap: 0
+      }
+      timeline.push(post_block);
+    }
   }
-  timeline.push(trials);
 
   function save_data(filename, filedata){
       var xhr = new XMLHttpRequest();
@@ -146,6 +182,20 @@
   var warning = function() {
     return "Are you sure you want to leave? Your data may not be recorded.";
   }
+
+  var demographics = {
+    type: 'survey-html-form',
+    preamble: "You have now completed the experiment. We would now like to collect some "+
+        "basic demographic information.<br /><br />",
+    html: "Age: <input name='age' type='number' min='18' max='100' /><br /><br />"+
+        "Gender: <br />"+
+        "<input name='gender' type='radio' value='male'><label for='male'>Male</label><br />"+
+        "<input name='gender' type='radio' value='female'><label for='female'>Female</label><br />"+
+        "<input name='gender' type='radio' value='other'><label for='other'>Other</label><br />"+
+        "<input name='gender' type='radio' value='pnts'><label for='pnts'>Prefer not to say</label>"+
+        "<br /><br />"
+  }
+  timeline.push(demographics);
 
   var debrief = {
     type: 'html-keyboard-response',
@@ -159,10 +209,15 @@
       save_data('mirault2018/' + last_trial.uid + '_' + last_trial.timestamp + '.csv',
                 jsPsych.data.get().csv());
       $(window).off('beforeunload', warning);
-      var message = "Thank you for completing this HIT! <br /><br />"+
+      var message = "Thank you for completing this HIT! Your responses will help us "+
+        "understand how we process words and sentences, particularly when some words in "+
+        "a sentence have their order switched. Please refrain from sharing information "+
+        "about the experiment with other potential participants to ensure that their "+
+        "data will be reliable. <br /><br />"+
         "Your responses are being saved. Please close this page after "+
         "you copy the code below and submit the HIT. <br /><br />"+
-        "Your completion code is <span class=\"uid\">" + last_trial.uid + "</span>. Please return to the "+
+        "Your completion code is <span class=\"uid\">" + last_trial.uid +
+        "</span>. Please return to the "+
         "MTurk HIT page to past this code and submit the HIT. Your "+
         "completion payment will be processed within the next 15 hours.";
       return message;
