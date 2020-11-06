@@ -32,9 +32,159 @@ The repository for this project is hosted on [GitHub](https://github.com/psych25
 
 <!--Original effect size, power analysis for samples to achieve 80%, 90%, 95% power to detect that effect size.  Considerations of feasibility for selecting planned sample size.-->
 
+I reproduced the data processing and analysis methods using the original data so that the mixed-effects model could be directly used to estimate power by simulation.
+
+```{r "library config", cache = FALSE, include = FALSE}
+require(knitr)
+orig_dir <- "../original_paper/original_data/"
+opts_knit$set(root.dir = orig_dir)
+
+#### Load relevant libraries
+require(lme4)
+require(tidyverse)
+require(magrittr)
+require(ggplot2)
+require(cowplot)
+require(simr)
+```
+
+```{r "original data processing"}
+### Power analysis
+setwd(orig_dir)
+
+#### Import data
+orig_files <- grep(".txt$", list.files(), value = TRUE)
+
+orig_data_df <- data.frame()
+orig_data_list <- list()
+
+for (file_no in seq_along(orig_files)) {
+  new_orig_data <- scan(orig_files[file_no], sep = "@", what = "character", quiet = TRUE) 
+  new_orig_data_df <- as.data.frame(do.call(rbind, strsplit(new_orig_data, split = ";")))
+  names(new_orig_data_df) <- c("trial", "item_no", "start_time", "end_time", "response", "condition", "group")
+  new_orig_data_df$participant <- file_no
+  orig_data_list[[file_no]] <- new_orig_data_df[-161,]
+}
+orig_data_df <- bind_rows(orig_data_list) 
+
+#### Pre-process data
+substring(orig_data_df$start_time, 9, 9) <- "." # handle time format
+substring(orig_data_df$end_time, 9, 9) <- "."
+
+orig_data_df <- orig_data_df %>% mutate(rt = 1000 * difftime(paste("2026-01-01", .$end_time), 
+                                             paste("2026-01-01", .$start_time)))
+attributes(orig_data_df$rt)$units = "milliseconds"
+orig_data_df$rt <- round(orig_data_df$rt, 0)
+
+orig_data_df <- orig_data_df %>% mutate(correct = ((.$condition > 0 & .$response == 0) | 
+                                                      (.$condition == 0 & .$response == 1)))
+
+#### Convert data into correct format
+orig_data_df$rt <- as.numeric(orig_data_df$rt)
+orig_data_df$correct <- as.logical(orig_data_df$correct)
+orig_data_df$condition <- as_factor(recode(orig_data_df$condition, 
+                                           "0" = "gram", "1" = "transword", "2" = "control"))
+orig_data_df$item_no <- as_factor(orig_data_df$item_no)
+orig_data_df$participant <- as_factor(orig_data_df$participant)
+
+#### Data exclusion
+summary_orig_tbl <- orig_data_df %>% 
+  group_by(participant) %>%
+  summarise(avg_rt = mean(rt, na.rm = TRUE), accuracy = mean(correct, na.rm = TRUE), 
+            .groups = 'drop')
+
+summary_orig_tbl <- summary_orig_tbl %>%
+  mutate(acc_exclude = (accuracy < 0.5)) %>%
+  mutate(rt_z = scale(avg_rt)) %>%
+  mutate(rt_exclude = (abs(rt_z) > 2.5))
+
+summary_orig_tbl_exclude <- summary_orig_tbl %>%
+  filter(acc_exclude == TRUE | rt_exclude == TRUE)
+
+orig_data_df_filtered <- orig_data_df %>%
+  filter(rt != 0) %>%
+  filter(condition != "gram")
+
+orig_data_df_excluded <- orig_data_df_filtered %>%
+  ##  note: original authors did not exclude any ppts, but according to their exclusion criteria they should 
+  ##  have excluded one ppt (mean RT > 2.5 SDs from mean)
+  filter(!(participant %in% summary_orig_tbl_exclude$participant)) 
+```
+
+After pre-processing the data, I noticed that the authors should have excluded one participant based on their exclusion criterion (mean RT > 2.5 standard deviations from mean); however, it was unclear whether this participant was or was not excluded. I thus attempted to reproduce the original findings and run a power analysis on both the excluded and unexcluded data.
+
+```{r "power analysis - no exclusion"}
+keyEffects <- function(data_df) {
+  #### LME model preparation
+  data_df$condition <- relevel(data_df$condition, ref = "control")
+  
+  orig_data_df_correct <- data_df %>%
+    filter(correct) %>%
+    filter(condition != "gram")
+  
+  rt_orig_model <- lmer((-1000 / rt) ~ condition + (1|item_no) + (1|participant),
+                        data = orig_data_df_correct, na.action = na.exclude,
+                        control = lmerControl(check.conv.singular = .makeCC(action = "ignore", tol = 1e-4)))
+  
+  print(summary(rt_orig_model))
+  
+  #### Accuracy GLME (included for completeness)
+  accuracy_orig_model <- glmer((1 - correct) ~ condition + (1|item_no) + (1|participant),
+                               data = orig_data_df_filtered, family = 'binomial',
+                               control = glmerControl(check.conv.singular = 
+                                                       .makeCC(action = "ignore", tol = 1e-4)))
+  
+  print(summary(accuracy_orig_model))
+  
+  return(list(rt_orig_model, accuracy_orig_model))
+}
+
+models_included <- keyEffects(orig_data_df_filtered)
+models_excluded <- keyEffects(orig_data_df_excluded)
+
+powerAnalysis <- function(rt_model) {
+  #### Post-hoc power analysis
+  power <- powerSim(rt_model, nsim = 200, progress = FALSE)
+  print(power)
+  
+  #### Power curve plotting
+  pwr_crv <- powerCurve(rt_model, along = "participant", nsim = 50, progress = FALSE)
+  pwr_crv_summary <- summary(pwr_crv)
+  pwr_levels = c(0.8, 0.9, 0.95) * summary(power)$mean
+  
+  pwr_crv_plot <- ggplot(pwr_crv_summary, aes(x = nlevels, y = mean * 100)) +
+    geom_errorbar(aes(ymin = lower * 100, ymax = upper * 100), width = 1.2, colour = "#0097a7") +
+    geom_line(colour = "#0097a7") +
+    coord_cartesian(xlim = c(0, 100), ylim = c(0, 100)) +
+    geom_hline(yintercept = pwr_levels * 100, linetype = "dashed", colour = "#555555") +
+    annotate("text", x = 5, y = pwr_levels[1:2] * 100 - 2.5, label = c("80% original", "90% original"), 
+             colour = "#555555") +
+    annotate("text", x = 5, y = pwr_levels[3] * 100 + 2.7, label = "95% original", colour = "#555555") + 
+    labs(x = "Number of participants", y = "Estimated power by simulation (%)")
+    #+ geom_vline(xintercept = c(59, 67, 76)) # approx values for 80%, 90%, and 95% original power 
+  
+  plot(pwr_crv_plot)
+  
+  return(list(power, pwr_crv, pwr_crv_plot))
+}
+
+#power_analysis_included <- powerAnalysis(models_included[[1]])
+#power_analysis_excluded <- powerAnalysis(models_excluded[[1]])
+
+# use these to display relevant info if you do not wish to rerun the simulations
+print(power_analysis_included[[1]])
+print(power_analysis_excluded[[1]])
+plot(power_analysis_included[[3]])
+plot(power_analysis_excluded[[3]])
+```
+
+Based on the power analysis, the power of the original study is 100%. As such, 23 participants are needed to achieve the same power as the original study. 
+
 ### Planned Sample
 
 <!--Planned sample size and/or termination rule, sampling frame, known demographics if any, preselection rules if any.-->
+
+The planned sample size is 25, which can achieve 100% of the power of the original study while allowing for some buffer (for exclusions). 
 
 ### Materials
 
@@ -80,7 +230,7 @@ The procedure from the original paper was followed closely: "Participants were i
 
 Additional detail regarding online presentation was as follows: "Stimuli were presented online using Java protocol on the personal computer of the participant. Sentences were presented in 30-point mono-spaced font (Droid Sans Mono) in black on a white background. Participants were asked to sit about 60 cm from the monitor, such that 1 cm equaled approximately 1° of visual angle. Participants responded using their index fingers with two arrows on the computer keyboard: right for grammatical decisions and left for ungrammatical decisions."
 
-The only deviation from the abovementioned procedure is that the experiment was coded using JavaScript (relying on the jsPsych library) instead of Java, but this is unlikely to have resulted in any substantial difference in the results.
+A few minor deviations from the abovementioned procedure were adopted. Firstly, the experiment was coded using JavaScript (relying on the jsPsych library) instead of Java. Secondly, two practice questions were given to ensure that participants were familiar with the paradigm before commencing. Thirdly, the experiment was divided into four blocks comprising 40 pseudorandomised questions each to alleviate the load on sustained attention. Finally, the keypresses were changed to 'F' and 'J' instead of the arrow keys to ensure that participants were using both index fingers, rather than two fingers on their right hand. These are unlikely to result in a substantial difference in results as they do not affect the main experimental manipulations.
 
 The experiment can be found [here](https://web.stanford.edu/~tanawm/mirault2018/experiment.html), and the code for the experiment can be found [here](https://github.com/psych251/mirault2018/blob/main/experiment/experiment.html).
 
@@ -97,7 +247,7 @@ The exclusion criteria used in the original paper were:
 1. Low overall accuracy (no specific cutoff), and
 2. RTs beyond 2.5 standard deviations from the grand mean.
 
-These were adopted for the present replication, with an accuracy cutoff specified at 50% (i.e. at chance), such that participants who performed worse than chance were excluded.
+These were adopted for the present replication, with an accuracy cutoff specified at 50% (i.e. at chance), such that participants who performed worse than chance were excluded. A third exclusion criterion of incomplete responses was also added to account for the potential technical difficulties of working on a crowdsourcing platform.
 
 <!--**Clarify key analysis of interest here**  You can also pre-specify additional analyses you plan to do.-->
 
@@ -112,7 +262,7 @@ These effects were considered to be reliable if |*t*| (for LME) or |*z*| (for GL
 
 ### Differences from Original Study
 
-<!--Explicitly describe known differences in sample, setting, procedure, and analysis plan from original study.  The goal, of course, is to minimize those differences, but differences will inevitably occur.  Also, note whether such differences are anticipated to make a difference based on claims in the original article or subsequent published research on the conditions for obtaining the effect.-->
+<!--Explicitly describe known differences in sample, setting, procedure, and analysis plan from original study. The goal, of course, is to minimize those differences, but differences will inevitably occur. Also, note whether such differences are anticipated to make a difference based on claims in the original article or subsequent published research on the conditions for obtaining the effect.-->
 
 In summary, two key methodological differences exist between the original study and the present replication. These are the recruitment of participants on MTurk (instead of volunteers), and the use of novel English stimuli (instead of the original French). The former may influence the results to a small extent due to motivation differences, but it is unlikely to result in a significant change in the result, considering that the study involves a response time task. The latter, however, is much more likely to affect the result. Whether the present replication succeeds or fails would thus depend strongly on whether the transposed-word effect is generalizable to English.
 
@@ -135,19 +285,14 @@ You can comment this section out prior to final report with data collection.-->
 <!--Data preparation following the analysis plan.-->
 The data are first prepared by extracting the relevant trials and implementing the exclusion criteria.
 
-```{r "library config", cache = FALSE, include = FALSE}
-require(knitr)
-data_dir <- "~/Documents/.../data/"
-opts_knit$set(root.dir = data_dir)
-
-#### Load relevant libraries
-require(lme4)
-require(tidyverse)
-require(magrittr)
+```{r "dir config", cache = FALSE, include = FALSE}
+data_dir <- "./../../data"
+opts_knit$set(root.dir = 'data_dir')
 ```
 
 ```{r "data prep"}
 ### Data Preparation
+setwd(data_dir)
 
 #### Import data
 files <- grep(".csv$", list.files(), value = TRUE)
@@ -163,14 +308,16 @@ full_data_df <- bind_rows(full_data_list)
 
 #### Filter trial data
 full_data_df %<>% 
-  filter(grepl("<p class='stimulus'>", .$stimulus, perl = TRUE))
+  filter(grepl("<p class='stimulus'>", .$stimulus, perl = TRUE)) %>%
+  select(-participant) %>%
+  rename(participant = uid)
 
 full_data_df$stimulus %<>%
   sub("<p class='stimulus'>", "", ., perl = TRUE) %>%
   sub("</p>", "", ., perl = TRUE)
 
 #### Convert data into correct format
-full_data_df$uid <- as_factor(full_data_df$uid)
+full_data_df$participant <- as_factor(full_data_df$participant)
 full_data_df$rt <- as.numeric(full_data_df$rt)
 full_data_df$correct <- as.logical(full_data_df$correct)
 full_data_df$condition <- as_factor(full_data_df$condition)
@@ -178,7 +325,7 @@ full_data_df$stimulus <- as_factor(full_data_df$stimulus)
 
 #### Data exclusion
 summary_tbl <- full_data_df %>% 
-  group_by(uid) %>%
+  group_by(participant) %>%
   summarise(avg_rt = mean(rt, na.rm = TRUE), accuracy = mean(correct, na.rm = TRUE), 
             .groups = 'drop')
 
@@ -191,7 +338,7 @@ summary_tbl_exclude <- summary_tbl %>%
   filter(acc_exclude == TRUE | rt_exclude == TRUE)
 
 full_data_df_filtered <- full_data_df %>%
-  filter(!(uid %in% summary_tbl_exclude$uid))
+  filter(!(participant %in% summary_tbl_exclude$participant))
 ```
 
 ### Confirmatory analysis
@@ -202,21 +349,66 @@ An LME was then used to analyse the RT data, and a GLME was used to analyse the 
 ```{r "confirm analysis"}
 ### Confirmatory analysis
 
-#### RT LME
-rt_model <- lmer((-1000 / rt) ~ condition + (1|stimulus) + (1|uid),
-                 data = full_data_df_filtered)
+models <- keyEffects(full_data_df_filtered)
 
-summary(rt_model)
-
-#### Accuracy GLME
-accuracy_model <- glmer((1 - correct) ~ condition + (1|stimulus) + (1|uid),
-                        data = full_data_df_filtered, family = 'binomial')
-
-summary(accuracy_model)
+# #### RT LME
+# rt_model <- lmer((-1000 / rt) ~ condition + (1|stimulus) + (1|participant),
+#                  data = full_data_df_filtered)
+# 
+# summary(rt_model)
+# 
+# #### Accuracy GLME
+# accuracy_model <- glmer((1 - correct) ~ condition + (1|stimulus) + (1|participant),
+#                         data = full_data_df_filtered, family = 'binomial')
+# 
+# summary(accuracy_model)
 
 ```
 
 <!--*Side-by-side graph with original graph is ideal here*-->
+
+```{r "graph"}
+se <- function(x) sd(x) / sqrt(length(x))
+
+color_scale <- c("#0097a7", "#e06666", "#93c47d")
+
+rt_summary = full_data_df_filtered %>% 
+  group_by(condition) %>%
+  summarise(mean_rt = mean(rt, na.rm = TRUE), rt_sem = se(na.omit(rt)), .groups = "drop")
+
+rt_summary %<>%
+  mutate(condition = fct_relevel(condition, "transword", "control", "gram"))
+
+rt_plot <- ggplot(rt_summary, aes(x = condition, y = mean_rt, fill = condition)) + 
+  geom_bar(position="dodge", stat="identity", width = .6) +
+  labs(x="Condition", y="Response time (ms)") +
+  scale_fill_manual(values=color_scale) + 
+  theme(legend.position = "none") +
+  scale_x_discrete(labels=c("TW", "Control", "Grammatical")) +
+  coord_cartesian(ylim=c(900, 1250)) +
+  geom_errorbar(aes(ymin = mean_rt - 2 * rt_sem, ymax = mean_rt + 2 * rt_sem), 
+                width = .2, position = position_dodge(.9))
+
+acc_summary = full_data_df_filtered %>% 
+  group_by(condition) %>%
+  summarise(mean_err = 100 * (1 - mean(correct, na.rm = TRUE)), 
+            err_sem = se(100 * (1 - na.omit(correct))), .groups = "drop")
+
+acc_summary %<>%
+  mutate(condition = fct_relevel(condition, "transword", "control", "gram"))
+
+acc_plot <- ggplot(acc_summary, aes(x = condition, y = mean_err, fill = condition)) + 
+  geom_bar(position="dodge", stat="identity", width = .6) +
+  labs(x="Condition", y="Error rate (%)") +
+  scale_fill_manual(values=color_scale) + 
+  theme(legend.position = "none") +
+  scale_x_discrete(labels=c("TW", "Control", "Grammatical")) +
+  geom_errorbar(aes(ymin = mean_err - 2 * err_sem, ymax = mean_err + 2 * err_sem), 
+                width = .2, position = position_dodge(.9))
+
+plot_grid(rt_plot, acc_plot)
+
+```
 
 ### Exploratory analyses
 
