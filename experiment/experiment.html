@@ -13,13 +13,13 @@
 
   <style>
     body {
-      background-color: #c0c0c0;
+      background-color: #eeeeee;
     }
 
     .stimulus {
       font-size: 30px;
       font-family: 'Roboto Mono', monospace;
-      color: #ffffff;
+      color: #000000;
     }
 
     .uid {
@@ -74,7 +74,7 @@
           "colored dot will then appear, indicating whether your response was "+
           "correct (green) or incorrect (red).<br /><br />"+
           "There will be two practice sequences, followed by four blocks of test "+
-          "sequences."+
+          "sequences. "+
           "Please sit about 60cm away from your screen, and display the task "+
           "in full screen. This HIT takes around 10 minutes to complete; please "+
           "complete it in one sitting. <br /><br />"+
@@ -118,7 +118,7 @@
           data: {
             condition: jsPsych.timelineVariable('condition'),
             block: i,
-            item_no: item_no
+            item_no: jsPsych.timelineVariable('item_no')
           },
           on_finish: function(data){
             if(data.condition == 'gram') {
