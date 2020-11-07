@@ -101,8 +101,9 @@ summary_orig_tbl <- summary_orig_tbl %>%
 summary_orig_tbl_exclude <- summary_orig_tbl %>%
   filter(acc_exclude == TRUE | rt_exclude == TRUE)
 
+orig_data_df %<>% filter(rt != 0)
+
 orig_data_df_filtered <- orig_data_df %>%
-  filter(rt != 0) %>%
   filter(condition != "gram")
 
 orig_data_df_excluded <- orig_data_df_filtered %>%
@@ -113,7 +114,7 @@ orig_data_df_excluded <- orig_data_df_filtered %>%
 
 After pre-processing the data, I noticed that the authors should have excluded one participant based on their exclusion criterion (mean RT > 2.5 standard deviations from mean); however, it was unclear whether this participant was or was not excluded. I thus attempted to reproduce the original findings and run a power analysis on both the excluded and unexcluded data.
 
-```{r "power analysis - no exclusion"}
+```{r "power analysis - no exclusion", warning=F}
 keyEffects <- function(data_df) {
   #### LME model preparation
   data_df$condition <- relevel(data_df$condition, ref = "control")
@@ -168,14 +169,14 @@ powerAnalysis <- function(rt_model) {
   return(list(power, pwr_crv, pwr_crv_plot))
 }
 
-#power_analysis_included <- powerAnalysis(models_included[[1]])
-#power_analysis_excluded <- powerAnalysis(models_excluded[[1]])
+power_analysis_included <- powerAnalysis(models_included[[1]])
+power_analysis_excluded <- powerAnalysis(models_excluded[[1]])
 
 # use these to display relevant info if you do not wish to rerun the simulations
-print(power_analysis_included[[1]])
-print(power_analysis_excluded[[1]])
-plot(power_analysis_included[[3]])
-plot(power_analysis_excluded[[3]])
+# print(power_analysis_included[[1]])
+# print(power_analysis_excluded[[1]])
+# plot(power_analysis_included[[3]])
+# plot(power_analysis_excluded[[3]])
 ```
 
 Based on the power analysis, the power of the original study is 100%. As such, 23 participants are needed to achieve the same power as the original study. 
@@ -283,7 +284,7 @@ You can comment this section out prior to final report with data collection.-->
 ### Data preparation
 
 <!--Data preparation following the analysis plan.-->
-The data are first prepared by extracting the relevant trials and implementing the exclusion criteria.
+The data were first prepared by extracting the relevant trials and implementing the exclusion criteria.
 
 ```{r "dir config", cache = FALSE, include = FALSE}
 data_dir <- "./../../data"
@@ -321,7 +322,6 @@ full_data_df$participant <- as_factor(full_data_df$participant)
 full_data_df$rt <- as.numeric(full_data_df$rt)
 full_data_df$correct <- as.logical(full_data_df$correct)
 full_data_df$condition <- as_factor(full_data_df$condition)
-full_data_df$stimulus <- as_factor(full_data_df$stimulus)
 
 #### Data exclusion
 summary_tbl <- full_data_df %>% 
@@ -348,66 +348,72 @@ An LME was then used to analyse the RT data, and a GLME was used to analyse the 
 
 ```{r "confirm analysis"}
 ### Confirmatory analysis
-
 models <- keyEffects(full_data_df_filtered)
-
-# #### RT LME
-# rt_model <- lmer((-1000 / rt) ~ condition + (1|stimulus) + (1|participant),
-#                  data = full_data_df_filtered)
-# 
-# summary(rt_model)
-# 
-# #### Accuracy GLME
-# accuracy_model <- glmer((1 - correct) ~ condition + (1|stimulus) + (1|participant),
-#                         data = full_data_df_filtered, family = 'binomial')
-# 
-# summary(accuracy_model)
-
 ```
 
 <!--*Side-by-side graph with original graph is ideal here*-->
 
 ```{r "graph"}
+#### Generate summary tables
 se <- function(x) sd(x) / sqrt(length(x))
 
 color_scale <- c("#0097a7", "#e06666", "#93c47d")
 
-rt_summary = full_data_df_filtered %>% 
-  group_by(condition) %>%
-  summarise(mean_rt = mean(rt, na.rm = TRUE), rt_sem = se(na.omit(rt)), .groups = "drop")
-
-rt_summary %<>%
-  mutate(condition = fct_relevel(condition, "transword", "control", "gram"))
-
-rt_plot <- ggplot(rt_summary, aes(x = condition, y = mean_rt, fill = condition)) + 
-  geom_bar(position="dodge", stat="identity", width = .6) +
-  labs(x="Condition", y="Response time (ms)") +
-  scale_fill_manual(values=color_scale) + 
-  theme(legend.position = "none") +
-  scale_x_discrete(labels=c("TW", "Control", "Grammatical")) +
-  coord_cartesian(ylim=c(900, 1250)) +
-  geom_errorbar(aes(ymin = mean_rt - 2 * rt_sem, ymax = mean_rt + 2 * rt_sem), 
-                width = .2, position = position_dodge(.9))
-
-acc_summary = full_data_df_filtered %>% 
-  group_by(condition) %>%
-  summarise(mean_err = 100 * (1 - mean(correct, na.rm = TRUE)), 
+make_summary <- function(data_df, is_acc) {
+  if (is_acc) {
+    summary_df <- data_df %>%
+      group_by(condition) %>%
+      summarise(mean_err = 100 * (1 - mean(correct, na.rm = TRUE)),
             err_sem = se(100 * (1 - na.omit(correct))), .groups = "drop")
+  } else {
+    summary_df = data_df %>% 
+      group_by(condition) %>%
+      summarise(mean_rt = mean(rt, na.rm = TRUE), rt_sem = se(na.omit(rt)), .groups = "drop")
+  }
+  return(summary_df)
+}
 
-acc_summary %<>%
-  mutate(condition = fct_relevel(condition, "transword", "control", "gram"))
+orig_rt_summary <- make_summary(orig_data_df, 0)
+orig_acc_summary <- make_summary(orig_data_df, 1)
 
-acc_plot <- ggplot(acc_summary, aes(x = condition, y = mean_err, fill = condition)) + 
-  geom_bar(position="dodge", stat="identity", width = .6) +
-  labs(x="Condition", y="Error rate (%)") +
-  scale_fill_manual(values=color_scale) + 
-  theme(legend.position = "none") +
-  scale_x_discrete(labels=c("TW", "Control", "Grammatical")) +
-  geom_errorbar(aes(ymin = mean_err - 2 * err_sem, ymax = mean_err + 2 * err_sem), 
-                width = .2, position = position_dodge(.9))
+rt_summary <- make_summary(full_data_df_filtered, 0)
+acc_summary <- make_summary(full_data_df_filtered, 1)
 
-plot_grid(rt_plot, acc_plot)
+#### Generate summary plots
+plot_summary <- function(summary_df, is_acc) {
+  summary_df %<>%
+    mutate(condition = fct_relevel(condition, "transword", "control", "gram"))
 
+  mean_var <- ifelse(is_acc, as.name("mean_err"), as.name("mean_rt"))
+  sem_var <- ifelse(is_acc, as.name("err_sem"), as.name("rt_sem"))
+  y_lab <- ifelse(is_acc, "Error rate (%)", "Response time (ms)")
+  
+  summary_plot <- ggplot(summary_df, aes(x = condition, y = !!mean_var, fill = condition)) + 
+    geom_bar(position = "dodge", stat = "identity", width = .6) +
+    labs(x = "Condition", y = y_lab) +
+    scale_fill_manual(values = color_scale) + 
+    theme(legend.position = "none") +
+    scale_x_discrete(labels = c("TW", "Control", "Grammatical")) +
+    geom_errorbar(aes(ymin = !!mean_var - 2 * !!sem_var, ymax = !!mean_var + 2 * !!sem_var), 
+                  width = .2, position = position_dodge(.9))
+}
+
+orig_rt_plot <- plot_summary(orig_rt_summary, 0)
+orig_acc_plot <- plot_summary(orig_acc_summary, 1)
+
+rt_plot <- plot_summary(rt_summary, 0)
+acc_plot <- plot_summary(acc_summary, 1)
+
+orig_title <- ggdraw() +
+  draw_label("Original results", fontface = "bold", x = 0, hjust = 0) +
+  theme(plot.margin = margin(0, 0, 0, 7))
+
+repl_title <- ggdraw() +
+  draw_label("Replication results", fontface = "bold", x = 0, hjust = 0) +
+  theme(plot.margin = margin(0, 0, 0, 7))
+
+plot_grid(orig_title, plot_grid(orig_rt_plot, orig_acc_plot), ncol = 1, rel_heights = c(0.1, 1))
+plot_grid(repl_title, plot_grid(rt_plot, acc_plot), ncol = 1, rel_heights = c(0.1, 1))
 ```
 
 ### Exploratory analyses
