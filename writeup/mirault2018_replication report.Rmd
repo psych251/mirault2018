@@ -36,8 +36,6 @@ I reproduced the data processing and analysis methods using the original data so
 
 ```{r "library config", cache = FALSE, include = FALSE}
 require(knitr)
-orig_dir <- "../original_paper/original_data/"
-opts_knit$set(root.dir = orig_dir)
 
 #### Load relevant libraries
 require(lme4)
@@ -46,20 +44,21 @@ require(magrittr)
 require(ggplot2)
 require(cowplot)
 require(simr)
+require(kableExtra)
 ```
 
 ```{r "original data processing"}
 ### Power analysis
-setwd(orig_dir)
 
 #### Import data
-orig_files <- grep(".txt$", list.files(), value = TRUE)
+orig_dir <- "../original_paper/original_data/"
+orig_files <- grep(".txt$", list.files(path = orig_dir), value = TRUE)
 
 orig_data_df <- data.frame()
 orig_data_list <- list()
 
 for (file_no in seq_along(orig_files)) {
-  new_orig_data <- scan(orig_files[file_no], sep = "@", what = "character", quiet = TRUE) 
+  new_orig_data <- scan(file.path(orig_dir, orig_files[file_no]), sep = "@", what = "character", quiet = TRUE) 
   new_orig_data_df <- as.data.frame(do.call(rbind, strsplit(new_orig_data, split = ";")))
   names(new_orig_data_df) <- c("trial", "item_no", "start_time", "end_time", "response", "condition", "group")
   new_orig_data_df$participant <- file_no
@@ -72,12 +71,12 @@ substring(orig_data_df$start_time, 9, 9) <- "." # handle time format
 substring(orig_data_df$end_time, 9, 9) <- "."
 
 orig_data_df <- orig_data_df %>% mutate(rt = 1000 * difftime(paste("2026-01-01", .$end_time), 
-                                             paste("2026-01-01", .$start_time)))
+                                                             paste("2026-01-01", .$start_time)))
 attributes(orig_data_df$rt)$units = "milliseconds"
 orig_data_df$rt <- round(orig_data_df$rt, 0)
 
 orig_data_df <- orig_data_df %>% mutate(correct = ((.$condition > 0 & .$response == 0) | 
-                                                      (.$condition == 0 & .$response == 1)))
+                                                     (.$condition == 0 & .$response == 1)))
 
 #### Convert data into correct format
 orig_data_df$rt <- as.numeric(orig_data_df$rt)
@@ -104,9 +103,6 @@ summary_orig_tbl_exclude <- summary_orig_tbl %>%
 orig_data_df %<>% filter(rt != 0)
 
 orig_data_df_filtered <- orig_data_df %>%
-  filter(condition != "gram")
-
-orig_data_df_excluded <- orig_data_df_filtered %>%
   ##  note: original authors did not exclude any ppts, but according to their exclusion criteria they should 
   ##  have excluded one ppt (mean RT > 2.5 SDs from mean)
   filter(!(participant %in% summary_orig_tbl_exclude$participant)) 
@@ -114,35 +110,43 @@ orig_data_df_excluded <- orig_data_df_filtered %>%
 
 After pre-processing the data, I noticed that the authors should have excluded one participant based on their exclusion criterion (mean RT > 2.5 standard deviations from mean); however, it was unclear whether this participant was or was not excluded. I thus attempted to reproduce the original findings and run a power analysis on both the excluded and unexcluded data.
 
-```{r "power analysis - no exclusion", warning=F}
+```{r "power analysis", warning=F}
 keyEffects <- function(data_df) {
+  ## note: the implementation of this function was modified slightly from the pre-registered version to
+  ##       rectify an error in the code
+  
   #### LME model preparation
   data_df$condition <- relevel(data_df$condition, ref = "control")
   
-  orig_data_df_correct <- data_df %>%
-    filter(correct) %>%
+  data_df_ungram <- data_df %>%
     filter(condition != "gram")
   
-  rt_orig_model <- lmer((-1000 / rt) ~ condition + (1|item_no) + (1|participant),
-                        data = orig_data_df_correct, na.action = na.exclude,
-                        control = lmerControl(check.conv.singular = .makeCC(action = "ignore", tol = 1e-4)))
+  data_df_correct <- data_df_ungram %>%
+    filter(correct) 
   
-  print(summary(rt_orig_model))
+  rt_model <- lmer((-1000 / rt) ~ condition + (1|item_no) + (1|participant),
+                   data = data_df_correct, na.action = na.exclude,
+                   control = lmerControl(check.conv.singular = .makeCC(action = "ignore", tol = 1e-4)))
   
-  #### Accuracy GLME (included for completeness)
-  accuracy_orig_model <- glmer((1 - correct) ~ condition + (1|item_no) + (1|participant),
-                               data = orig_data_df_filtered, family = 'binomial',
-                               control = glmerControl(check.conv.singular = 
-                                                       .makeCC(action = "ignore", tol = 1e-4)))
+  print(summary(rt_model)[["coefficients"]])
+  cat("\n")
   
-  print(summary(accuracy_orig_model))
+  #### Accuracy GLME
+  accuracy_model <- glmer((1 - correct) ~ condition + (1|item_no) + (1|participant),
+                          data = data_df_ungram, family = 'binomial',
+                          control = glmerControl(check.conv.singular = 
+                                                   .makeCC(action = "ignore", tol = 1e-4)))
   
-  return(list(rt_orig_model, accuracy_orig_model))
+  print(summary(accuracy_model)[["coefficients"]])
+  
+  return(list(rt_model, accuracy_model))
 }
 
-models_included <- keyEffects(orig_data_df_filtered)
-models_excluded <- keyEffects(orig_data_df_excluded)
+models_included <- keyEffects(orig_data_df)
+models_excluded <- keyEffects(orig_data_df_filtered)
+```
 
+```{r, eval=F}
 powerAnalysis <- function(rt_model) {
   #### Post-hoc power analysis
   power <- powerSim(rt_model, nsim = 200, progress = FALSE)
@@ -162,7 +166,7 @@ powerAnalysis <- function(rt_model) {
              colour = "#555555") +
     annotate("text", x = 5, y = pwr_levels[3] * 100 + 2.7, label = "95% original", colour = "#555555") + 
     labs(x = "Number of participants", y = "Estimated power by simulation (%)")
-    #+ geom_vline(xintercept = c(59, 67, 76)) # approx values for 80%, 90%, and 95% original power 
+  #+ geom_vline(xintercept = c(59, 67, 76)) # approx values for 80%, 90%, and 95% original power 
   
   plot(pwr_crv_plot)
   
@@ -185,7 +189,7 @@ Based on the power analysis, the power of the original study is 100%. As such, 2
 
 <!--Planned sample size and/or termination rule, sampling frame, known demographics if any, preselection rules if any.-->
 
-The planned sample size is 25, which can achieve 100% of the power of the original study while allowing for some buffer (for exclusions). 
+The planned sample size is 25, which can achieve 100% of the power of the original study while allowing for some buffer (for exclusions). The participants are US residents recruited on Amazon MTurk.
 
 ### Materials
 
@@ -274,9 +278,38 @@ You can comment this section out prior to final report with data collection.-->
 #### Actual Sample
 <!--Sample size, demographics, data exclusions based on rules spelled out in analysis plan-->
 
+A total of 25 US residents were recruited from Amazon MTurk. One participant was excluded due to unusually high RTs (> 3.22 standard deviations from the grand mean). The remaining 24 participants were retained for subsequent analyses. The age and gender distributions are as follows:
+
+```{r "demographics"}
+#### Import data
+data_dir <- "../data"
+files <- grep(".csv$", list.files(data_dir), value = TRUE)
+
+full_data_df <- data.frame()
+full_data_list <- list()
+
+for (file_no in seq_along(files)) {
+  new_data_df <- read.csv(file.path(data_dir, files[file_no]))
+  full_data_list[[file_no]] <- new_data_df
+}
+full_data_df <- bind_rows(full_data_list) 
+
+#### Get demographic data
+full_data_dem <- full_data_df %>%
+  filter(trial_type == "survey-html-form") %>%
+  select(c(uid, list, responses)) %>%
+  mutate(age = as.numeric(sub("({\"age\":\")(\\d\\d)(\",.*)", "\\2", responses, perl = TRUE)),
+         gender = sub("(.*\"gender\":\")(.*)(\"})", "\\2", responses, perl = TRUE))
+
+#### Age:
+summary(full_data_dem$age)
+#### Gender:
+table(full_data_dem$gender)
+```
+
 #### Differences from pre-data collection methods plan
 <!--Any differences from what was described as the original plan, or “none”.-->
-
+None.
 
 ## Results
 
@@ -286,26 +319,8 @@ You can comment this section out prior to final report with data collection.-->
 <!--Data preparation following the analysis plan.-->
 The data were first prepared by extracting the relevant trials and implementing the exclusion criteria.
 
-```{r "dir config", cache = FALSE, include = FALSE}
-data_dir <- "./../../data"
-opts_knit$set(root.dir = 'data_dir')
-```
-
 ```{r "data prep"}
 ### Data Preparation
-setwd(data_dir)
-
-#### Import data
-files <- grep(".csv$", list.files(), value = TRUE)
-
-full_data_df <- data.frame()
-full_data_list <- list()
-
-for (file_no in seq_along(files)) {
-  new_data_df <- read.csv(files[file_no])
-  full_data_list[[file_no]] <- new_data_df
-}
-full_data_df <- bind_rows(full_data_list) 
 
 #### Filter trial data
 full_data_df %<>% 
@@ -316,6 +331,9 @@ full_data_df %<>%
 full_data_df$stimulus %<>%
   sub("<p class='stimulus'>", "", ., perl = TRUE) %>%
   sub("</p>", "", ., perl = TRUE)
+
+full_data_df %<>% 
+  filter(trial_index > 6) # remove practice trials
 
 #### Convert data into correct format
 full_data_df$participant <- as_factor(full_data_df$participant)
@@ -344,16 +362,18 @@ full_data_df_filtered <- full_data_df %>%
 ### Confirmatory analysis
 
 <!--The analyses as specified in the analysis plan.-->
-An LME was then used to analyse the RT data, and a GLME was used to analyse the accuracy data.
+An LME was then used to analyse the RT data, and a GLME was used to analyse the accuracy data. 
 
 ```{r "confirm analysis"}
 ### Confirmatory analysis
 models <- keyEffects(full_data_df_filtered)
 ```
 
+The original paper found that "participants were significantly slower at classifying transposed-word sequences as being ungrammatical compared with the control sequences, *b* = 0.03, *SE* = 0.00, *t* = 8.57, and they made significantly more errors in the transposed-word condition than in the control condition, *b* = 1.77, *SE* = 0.11, *z* = 15.30." These results demonstrate a similar effect, albeit with slightly smaller *t* and *z* values, which is to be expected due to the smaller number of participants.
+
 <!--*Side-by-side graph with original graph is ideal here*-->
 
-```{r "graph"}
+```{r "graph", warning=F}
 #### Generate summary tables
 se <- function(x) sd(x) / sqrt(length(x))
 
@@ -362,12 +382,12 @@ color_scale <- c("#0097a7", "#e06666", "#93c47d")
 make_summary <- function(data_df, is_acc) {
   if (is_acc) {
     summary_df <- data_df %>%
-      group_by(condition) %>%
+      group_by(condition, .add = TRUE) %>%
       summarise(mean_err = 100 * (1 - mean(correct, na.rm = TRUE)),
-            err_sem = se(100 * (1 - na.omit(correct))), .groups = "drop")
+                err_sem = se(100 * (1 - na.omit(correct))), .groups = "drop")
   } else {
     summary_df = data_df %>% 
-      group_by(condition) %>%
+      group_by(condition, .add = TRUE) %>%
       summarise(mean_rt = mean(rt, na.rm = TRUE), rt_sem = se(na.omit(rt)), .groups = "drop")
   }
   return(summary_df)
@@ -383,7 +403,7 @@ acc_summary <- make_summary(full_data_df_filtered, 1)
 plot_summary <- function(summary_df, is_acc) {
   summary_df %<>%
     mutate(condition = fct_relevel(condition, "transword", "control", "gram"))
-
+  
   mean_var <- ifelse(is_acc, as.name("mean_err"), as.name("mean_rt"))
   sem_var <- ifelse(is_acc, as.name("err_sem"), as.name("rt_sem"))
   y_lab <- ifelse(is_acc, "Error rate (%)", "Response time (ms)")
@@ -398,11 +418,19 @@ plot_summary <- function(summary_df, is_acc) {
                   width = .2, position = position_dodge(.9))
 }
 
-orig_rt_plot <- plot_summary(orig_rt_summary, 0)
-orig_acc_plot <- plot_summary(orig_acc_summary, 1)
+orig_rt_plot <- plot_summary(orig_rt_summary, 0) + 
+  ggtitle("Original results") +
+  ylim(c(0, 2100))
+orig_acc_plot <- plot_summary(orig_acc_summary, 1) + 
+  ggtitle("Original results") +
+  ylim(c(0, 17.5))
 
-rt_plot <- plot_summary(rt_summary, 0)
-acc_plot <- plot_summary(acc_summary, 1)
+rt_plot <- plot_summary(rt_summary, 0) + 
+  ggtitle("Replication results") +
+  ylim(c(0, 2100))
+acc_plot <- plot_summary(acc_summary, 1) + 
+  ggtitle("Replication results") +
+  ylim(c(0, 17.5))
 
 orig_title <- ggdraw() +
   draw_label("Original results", fontface = "bold", x = 0, hjust = 0) +
@@ -412,20 +440,109 @@ repl_title <- ggdraw() +
   draw_label("Replication results", fontface = "bold", x = 0, hjust = 0) +
   theme(plot.margin = margin(0, 0, 0, 7))
 
-plot_grid(orig_title, plot_grid(orig_rt_plot, orig_acc_plot), ncol = 1, rel_heights = c(0.1, 1))
-plot_grid(repl_title, plot_grid(rt_plot, acc_plot), ncol = 1, rel_heights = c(0.1, 1))
+#### RT
+plot_grid(orig_rt_plot, rt_plot)
+#### Accuracy
+plot_grid(orig_acc_plot, acc_plot)
 ```
 
 ### Exploratory analyses
 
 <!--Any follow-up analyses desired (not required).-->
+The authors also conducted post-hoc analyses on the effects of word length and word class (closed vs open), finding that there were significant interaction effects between condition and each of those variables, such that the transposed-word effect was larger for shorter and closed-class words. They also noted that the transposed-word effect remained significant for longer and open-class words. The authors' material contained insufficient information regarding their exact analytic workflow for these analyses; however, their R script suggested that they may have used a median split for word length, and they also noted that they coded word class as "closed" as long as either of the transposed words were closed-class. Their results are as follows:
+
+```{r}
+orig_class <- data.frame("Estimate" = c(0.72, 0.08, 0.07, 0.06),
+                         "Std. Error" = c(0.01, 0.00, 0.01, 0.00),
+                         "t value" = c(38.06, 9.23, 6.23, 6.19),
+                         "Estimate" = c(4.09, 2.76, 0.18, 1.50),
+                         "Std. Error" = c(0.32, 0.22, 0.35, 0.26),
+                         "z value" = c(12.44, 12.23, 0.51, 5.74))
+rownames(orig_class) <- c("(Intercept)", "Condition", "Closed class", "Interaction")
+colnames(orig_class) <- c("Estimate", "Std. Error", "t value", "Estimate", "Std. Error", "z value")
+kable(orig_class) %>%
+  kable_styling() %>%
+  add_header_above(c(" " = 1, "RT" = 3, "Error rate" = 3))
+
+orig_len <- data.frame("Estimate" = c(0.76, 0.11, 0.02, 0.01),
+                       "Std. Error" = c(0.02, 0.01, 0.00, 0.00),
+                       "t value" = c(30.87, 7.80, 5.70, 5.82),
+                       "Estimate" = c(3.72, 3.36, 0.00, 0.38),
+                       "Std. Error" = c(0.38, 0.41, 0.07, 0.08),
+                       "z value" = c(9.78, 8.12, 0.01, 4.59))
+rownames(orig_len) <- c("(Intercept)", "Condition", "Avg length", "Interaction")
+colnames(orig_len) <- c("Estimate", "Std. Error", "t value", "Estimate", "Std. Error", "z value")
+kable(orig_len) %>%
+  kable_styling() %>%
+  add_header_above(c(" " = 1, "RT" = 3, "Error rate" = 3))
+```
+
+To improve precision, I implemented these variables using a continuous length variable (mean length of transposed words), and coded the number of closed-class words (out of the two transposed words; defined as determiners, prepositions, pronouns, modals, auxiliaries, and conjunctions) as opposed to whether there was at least one closed-class word or not. Furthermore, both of these variables are correlated with word frequency, and I thus included an additional model using the log mean frequency of transposed words as a predictor. In all of these cases, the word-related variables were centered to avoid effects of multicollinearity among predictors. 
+
+```{r "exploratory", results="asis"}
+stimuli_data <- read.csv("stimuli_data.csv") %>%
+  select(c(item_no, sequence, condition, list, group, 
+           freq_avg, closed_sum, len_avg)) %>%
+  mutate(log_freq = log(freq_avg)) %>%
+  mutate(log_freq_ctr = log_freq - mean(log_freq),
+         closed_sum_ctr = closed_sum - mean(closed_sum),
+         len_avg_ctr = len_avg - mean(len_avg))
+
+stimuli_filtered <- stimuli_data %>%
+  select(c(log_freq_ctr, closed_sum_ctr, len_avg_ctr))
+
+ea_names <- c("Log freq (ctr)", "Closed class (ctr)", "Avg length (ctr)")
+correl <- as.data.frame(cor(stimuli_filtered))
+rownames(correl) <- ea_names
+colnames(correl) <- ea_names
+kable(correl) %>% kable_styling()
+
+ea_df <- left_join(full_data_df_filtered, stimuli_data, by = c("item_no", "condition")) %>%
+  filter(group != 0)
+
+ea_df_ungram <- ea_df %>%
+  filter(condition != "gram")
+
+ea_df_correct <- ea_df_ungram %>%
+  filter(correct)
+
+ea_vars <- c(as.name("log_freq_ctr"), as.name("closed_sum_ctr"), as.name("len_avg_ctr"))
+rt_ea_model <- list()
+acc_ea_model <- list()
+
+for (i in 1:3) {
+  this_var <- ea_vars[[i]]
+  rt_ea_model[[i]] <- lmer((-1000 / rt) ~ (condition * eval(this_var)) + (1|item_no) + (1|participant),
+                           data = ea_df_correct, na.action = na.exclude,
+                           control = lmerControl(check.conv.singular = .makeCC(action = "ignore", tol = 1e-4)))
+  acc_ea_model[[i]] <- glmer((1 - correct) ~ (condition * eval(this_var)) + (1|item_no) + (1|participant),
+                             data = ea_df_ungram, family = 'binomial',
+                             control = glmerControl(check.conv.singular = 
+                                                      .makeCC(action = "ignore", tol = 1e-4)))
+  rt_summary_tbl <- as.data.frame(summary(rt_ea_model[[i]])[["coefficients"]]) %>% select(c(1, 2, 3))
+  acc_summary_tbl <- as.data.frame(summary(acc_ea_model[[i]])[["coefficients"]]) %>% select(c(1, 2, 3))
+  this_summary_tbl <- cbind(rt_summary_tbl, acc_summary_tbl)
+  row.names(this_summary_tbl) <- c("(Intercept)", "Condition", ea_names[i], "Interaction")
+  print(kable(this_summary_tbl) %>%
+          kable_styling() %>%
+          add_header_above(c(" " = 1, "RT" = 3, "Error rate" = 3)))
+  cat("\n")
+}
+```
+
+There are three key observations to note. Firstly, none of the interaction effects were significant, unlike the original study. Secondly, the main effect of word length did not reach significance for reaction times. Finally, the main effect of word class was in the opposite direction in comparison with the original paper. There does not seem to be a straightforward explanation for why this is the case, although perhaps language plays some role; nonetheless, one key replicated result is the fact that condition still has a significant main effect even when the effects of these other covariates are partialled out.
 
 ## Discussion
 
 ### Summary of Replication Attempt
 
 <!--Open the discussion section with a paragraph summarizing the primary result from the confirmatory analysis and the assessment of whether it replicated, partially replicated, or failed to replicate the original result.--> 
+As found in the original paper, participants were slower at deciding that transposed-word sequences are ungrammatical in comparison with control sequences, and also made more errors for transposed-word sequences in comparison with control sequences. While the *t* and *z* values are not as large in magnitude in comparison with the original, this is somewhat expected due to the reduced sample size. Given that the effects are in the same direction and of a similar magnitude with the original study, the results did replicate successfully. 
+
+### Summary of Exploratory Analyses
+Similarly, condition was found to be a significant predictor even when word length and word class were accounted for; this was also the case for word frequency. Additionally, for RTs, word frequency and word class contributed a significant main effect, while word length did not. In contrast, none of these variables were significant predictors for accuracy. Interestingly, unlike the original study, none of these variables were involved in a significant interaction effect either. More research that systematically investigates the role of these other variables across various languages may be insightful in determining the relationship among these variables and the transposed-word effect.
 
 ### Commentary
 
 <!--Add open-ended commentary (if any) reflecting (a) insights from follow-up exploratory analysis, (b) assessment of the meaning of the replication (or not) - e.g., for a failure to replicate, are the differences between original and present study ones that definitely, plausibly, or are unlikely to have been moderators of the result, and (c) discussion of any objections or challenges raised by the current and original authors about the replication attempt.  None of these need to be long.-->
+Overall, the replication of this study using English materials demonstrates that the transposed-word effect is robust and applicable cross-linguistically, as it does not depend solely upon the agreement and word order characteristics of French. To my knowledge, this is the first demonstration of the transposed-word effect in English, and the data from this replication can contribute to the discussion around word and sentence processing. 
