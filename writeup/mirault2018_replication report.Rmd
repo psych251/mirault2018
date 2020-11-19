@@ -146,7 +146,7 @@ models_included <- keyEffects(orig_data_df)
 models_excluded <- keyEffects(orig_data_df_filtered)
 ```
 
-```{r, eval=F}
+```{r "power curve", eval=F}
 powerAnalysis <- function(rt_model) {
   #### Post-hoc power analysis
   power <- powerSim(rt_model, nsim = 200, progress = FALSE)
@@ -364,7 +364,7 @@ full_data_df_filtered <- full_data_df %>%
 <!--The analyses as specified in the analysis plan.-->
 An LME was then used to analyse the RT data, and a GLME was used to analyse the accuracy data. 
 
-```{r "confirm analysis"}
+```{r "confirmatory"}
 ### Confirmatory analysis
 models <- keyEffects(full_data_df_filtered)
 ```
@@ -451,7 +451,7 @@ plot_grid(orig_acc_plot, acc_plot)
 <!--Any follow-up analyses desired (not required).-->
 The authors also conducted post-hoc analyses on the effects of word length and word class (closed vs open), finding that there were significant interaction effects between condition and each of those variables, such that the transposed-word effect was larger for shorter and closed-class words. They also noted that the transposed-word effect remained significant for longer and open-class words. The authors' material contained insufficient information regarding their exact analytic workflow for these analyses; however, their R script suggested that they may have used a median split for word length, and they also noted that they coded word class as "closed" as long as either of the transposed words were closed-class. Their results are as follows:
 
-```{r}
+```{r "exploratory original"}
 orig_class <- data.frame("Estimate" = c(0.72, 0.08, 0.07, 0.06),
                          "Std. Error" = c(0.01, 0.00, 0.01, 0.00),
                          "t value" = c(38.06, 9.23, 6.23, 6.19),
