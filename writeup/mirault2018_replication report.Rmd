@@ -70,34 +70,34 @@ orig_data_df <- bind_rows(orig_data_list)
 substring(orig_data_df$start_time, 9, 9) <- "." # handle time format
 substring(orig_data_df$end_time, 9, 9) <- "."
 
-orig_data_df <- orig_data_df %>% mutate(rt = 1000 * difftime(paste("2026-01-01", .$end_time), 
-                                                             paste("2026-01-01", .$start_time)))
+orig_data_df %<>% mutate(rt = 1000 * difftime(paste("2026-01-01", .$end_time), 
+                                              paste("2026-01-01", .$start_time)))
 attributes(orig_data_df$rt)$units = "milliseconds"
-orig_data_df$rt <- round(orig_data_df$rt, 0)
+orig_data_df$rt %<>% round(., 0)
 
-orig_data_df <- orig_data_df %>% mutate(correct = ((.$condition > 0 & .$response == 0) | 
-                                                     (.$condition == 0 & .$response == 1)))
+orig_data_df %<>% mutate(correct = ((.$condition > 0 & .$response == 0) | 
+                                      (.$condition == 0 & .$response == 1)))
 
 #### Convert data into correct format
-orig_data_df$rt <- as.numeric(orig_data_df$rt)
-orig_data_df$correct <- as.logical(orig_data_df$correct)
+orig_data_df$rt %<>% as.numeric()
+orig_data_df$correct %<>% as.logical()
 orig_data_df$condition <- as_factor(recode(orig_data_df$condition, 
                                            "0" = "gram", "1" = "transword", "2" = "control"))
-orig_data_df$item_no <- as_factor(orig_data_df$item_no)
-orig_data_df$participant <- as_factor(orig_data_df$participant)
+orig_data_df$item_no %<>% as_factor()
+orig_data_df$participant %<>% as_factor()
 
 #### Data exclusion
-summary_orig_tbl <- orig_data_df %>% 
+orig_summary_tbl <- orig_data_df %>% 
   group_by(participant) %>%
   summarise(avg_rt = mean(rt, na.rm = TRUE), accuracy = mean(correct, na.rm = TRUE), 
             .groups = 'drop')
 
-summary_orig_tbl <- summary_orig_tbl %>%
+orig_summary_tbl %<>%
   mutate(acc_exclude = (accuracy < 0.5)) %>%
   mutate(rt_z = scale(avg_rt)) %>%
   mutate(rt_exclude = (abs(rt_z) > 2.5))
 
-summary_orig_tbl_exclude <- summary_orig_tbl %>%
+orig_summary_tbl_exclude <- orig_summary_tbl %>%
   filter(acc_exclude == TRUE | rt_exclude == TRUE)
 
 orig_data_df %<>% filter(rt != 0)
@@ -105,18 +105,18 @@ orig_data_df %<>% filter(rt != 0)
 orig_data_df_filtered <- orig_data_df %>%
   ##  note: original authors did not exclude any ppts, but according to their exclusion criteria they should 
   ##  have excluded one ppt (mean RT > 2.5 SDs from mean)
-  filter(!(participant %in% summary_orig_tbl_exclude$participant)) 
+  filter(!(participant %in% orig_summary_tbl_exclude$participant)) 
 ```
 
 After pre-processing the data, I noticed that the authors should have excluded one participant based on their exclusion criterion (mean RT > 2.5 standard deviations from mean); however, it was unclear whether this participant was or was not excluded. I thus attempted to reproduce the original findings and run a power analysis on both the excluded and unexcluded data.
 
-```{r "power analysis", warning=F}
+```{r "reproduction", warning=F}
 keyEffects <- function(data_df) {
   ## note: the implementation of this function was modified slightly from the pre-registered version to
   ##       rectify an error in the code
   
   #### LME model preparation
-  data_df$condition <- relevel(data_df$condition, ref = "control")
+  data_df$condition %<>% relevel(ref = "control")
   
   data_df_ungram <- data_df %>%
     filter(condition != "gram")
@@ -146,7 +146,7 @@ models_included <- keyEffects(orig_data_df)
 models_excluded <- keyEffects(orig_data_df_filtered)
 ```
 
-```{r "power curve", eval=F}
+```{r "power analysis"}
 powerAnalysis <- function(rt_model) {
   #### Post-hoc power analysis
   power <- powerSim(rt_model, nsim = 200, progress = FALSE)
@@ -166,7 +166,6 @@ powerAnalysis <- function(rt_model) {
              colour = "#555555") +
     annotate("text", x = 5, y = pwr_levels[3] * 100 + 2.7, label = "95% original", colour = "#555555") + 
     labs(x = "Number of participants", y = "Estimated power by simulation (%)")
-  #+ geom_vline(xintercept = c(59, 67, 76)) # approx values for 80%, 90%, and 95% original power 
   
   plot(pwr_crv_plot)
   
@@ -183,7 +182,7 @@ power_analysis_excluded <- powerAnalysis(models_excluded[[1]])
 # plot(power_analysis_excluded[[3]])
 ```
 
-Based on the power analysis, the power of the original study is 100%. As such, 23 participants are needed to achieve the same power as the original study. 
+Based on the power analysis, the power of the original study is 100%. As such, 23 participants are needed to achieve the same power as the original study (assuming exclusion). 
 
 ### Planned Sample
 
@@ -285,26 +284,26 @@ A total of 25 US residents were recruited from Amazon MTurk. One participant was
 data_dir <- "../data"
 files <- grep(".csv$", list.files(data_dir), value = TRUE)
 
-full_data_df <- data.frame()
-full_data_list <- list()
+repl_data_df <- data.frame()
+repl_data_list <- list()
 
 for (file_no in seq_along(files)) {
   new_data_df <- read.csv(file.path(data_dir, files[file_no]))
-  full_data_list[[file_no]] <- new_data_df
+  repl_data_list[[file_no]] <- new_data_df
 }
-full_data_df <- bind_rows(full_data_list) 
+repl_data_df <- bind_rows(repl_data_list) 
 
 #### Get demographic data
-full_data_dem <- full_data_df %>%
+repl_data_dem <- repl_data_df %>%
   filter(trial_type == "survey-html-form") %>%
   select(c(uid, list, responses)) %>%
   mutate(age = as.numeric(sub("({\"age\":\")(\\d\\d)(\",.*)", "\\2", responses, perl = TRUE)),
          gender = sub("(.*\"gender\":\")(.*)(\"})", "\\2", responses, perl = TRUE))
 
 #### Age:
-summary(full_data_dem$age)
+summary(repl_data_dem$age)
 #### Gender:
-table(full_data_dem$gender)
+table(repl_data_dem$gender)
 ```
 
 #### Differences from pre-data collection methods plan
@@ -323,40 +322,40 @@ The data were first prepared by extracting the relevant trials and implementing 
 ### Data Preparation
 
 #### Filter trial data
-full_data_df %<>% 
+repl_data_df %<>% 
   filter(grepl("<p class='stimulus'>", .$stimulus, perl = TRUE)) %>%
   select(-participant) %>%
   rename(participant = uid)
 
-full_data_df$stimulus %<>%
+repl_data_df$stimulus %<>%
   sub("<p class='stimulus'>", "", ., perl = TRUE) %>%
   sub("</p>", "", ., perl = TRUE)
 
-full_data_df %<>% 
+repl_data_df %<>% 
   filter(trial_index > 6) # remove practice trials
 
 #### Convert data into correct format
-full_data_df$participant <- as_factor(full_data_df$participant)
-full_data_df$rt <- as.numeric(full_data_df$rt)
-full_data_df$correct <- as.logical(full_data_df$correct)
-full_data_df$condition <- as_factor(full_data_df$condition)
+repl_data_df$participant %<>% as_factor()
+repl_data_df$rt %<>% as.numeric()
+repl_data_df$correct %<>% as.logical()
+repl_data_df$condition %<>% as_factor()
 
 #### Data exclusion
-summary_tbl <- full_data_df %>% 
+repl_summary_tbl <- repl_data_df %>% 
   group_by(participant) %>%
   summarise(avg_rt = mean(rt, na.rm = TRUE), accuracy = mean(correct, na.rm = TRUE), 
             .groups = 'drop')
 
-summary_tbl %<>%
+repl_summary_tbl %<>%
   mutate(acc_exclude = (accuracy < 0.5)) %>%
   mutate(rt_z = scale(avg_rt)) %>%
   mutate(rt_exclude = (abs(rt_z) > 2.5))
 
-summary_tbl_exclude <- summary_tbl %>%
+repl_summary_tbl_exclude <- repl_summary_tbl %>%
   filter(acc_exclude == TRUE | rt_exclude == TRUE)
 
-full_data_df_filtered <- full_data_df %>%
-  filter(!(participant %in% summary_tbl_exclude$participant))
+repl_data_df_filtered <- repl_data_df %>%
+  filter(!(participant %in% repl_summary_tbl_exclude$participant))
 ```
 
 ### Confirmatory analysis
@@ -366,7 +365,7 @@ An LME was then used to analyse the RT data, and a GLME was used to analyse the 
 
 ```{r "confirmatory"}
 ### Confirmatory analysis
-models <- keyEffects(full_data_df_filtered)
+models <- keyEffects(repl_data_df_filtered)
 ```
 
 The original paper found that "participants were significantly slower at classifying transposed-word sequences as being ungrammatical compared with the control sequences, *b* = 0.03, *SE* = 0.00, *t* = 8.57, and they made significantly more errors in the transposed-word condition than in the control condition, *b* = 1.77, *SE* = 0.11, *z* = 15.30." These results demonstrate a similar effect, albeit with slightly smaller *t* and *z* values, which is to be expected due to the smaller number of participants.
@@ -396,8 +395,8 @@ make_summary <- function(data_df, is_acc) {
 orig_rt_summary <- make_summary(orig_data_df, 0)
 orig_acc_summary <- make_summary(orig_data_df, 1)
 
-rt_summary <- make_summary(full_data_df_filtered, 0)
-acc_summary <- make_summary(full_data_df_filtered, 1)
+repl_rt_summary <- make_summary(repl_data_df_filtered, 0)
+repl_acc_summary <- make_summary(repl_data_df_filtered, 1)
 
 #### Generate summary plots
 plot_summary <- function(summary_df, is_acc) {
@@ -425,10 +424,10 @@ orig_acc_plot <- plot_summary(orig_acc_summary, 1) +
   ggtitle("Original results") +
   ylim(c(0, 17.5))
 
-rt_plot <- plot_summary(rt_summary, 0) + 
+repl_rt_plot <- plot_summary(repl_rt_summary, 0) + 
   ggtitle("Replication results") +
   ylim(c(0, 2100))
-acc_plot <- plot_summary(acc_summary, 1) + 
+repl_acc_plot <- plot_summary(repl_acc_summary, 1) + 
   ggtitle("Replication results") +
   ylim(c(0, 17.5))
 
@@ -441,9 +440,9 @@ repl_title <- ggdraw() +
   theme(plot.margin = margin(0, 0, 0, 7))
 
 #### RT
-plot_grid(orig_rt_plot, rt_plot)
+plot_grid(orig_rt_plot, repl_rt_plot)
 #### Accuracy
-plot_grid(orig_acc_plot, acc_plot)
+plot_grid(orig_acc_plot, repl_acc_plot)
 ```
 
 ### Exploratory analyses
@@ -492,38 +491,38 @@ stimuli_filtered <- stimuli_data %>%
   select(c(log_freq_ctr, closed_sum_ctr, len_avg_ctr))
 
 ea_names <- c("Log freq (ctr)", "Closed class (ctr)", "Avg length (ctr)")
-correl <- as.data.frame(cor(stimuli_filtered))
-rownames(correl) <- ea_names
-colnames(correl) <- ea_names
-kable(correl) %>% kable_styling()
+ea_correl <- as.data.frame(cor(stimuli_filtered))
+rownames(ea_correl) <- ea_names
+colnames(ea_correl) <- ea_names
+kable(ea_correl) %>% kable_styling()
 
-ea_df <- left_join(full_data_df_filtered, stimuli_data, by = c("item_no", "condition")) %>%
+ea_data_df <- left_join(repl_data_df_filtered, stimuli_data, by = c("item_no", "condition")) %>%
   filter(group != 0)
 
-ea_df_ungram <- ea_df %>%
+ea_data_df_ungram <- ea_data_df %>%
   filter(condition != "gram")
 
-ea_df_correct <- ea_df_ungram %>%
+ea_data_df_correct <- ea_data_df_ungram %>%
   filter(correct)
 
 ea_vars <- c(as.name("log_freq_ctr"), as.name("closed_sum_ctr"), as.name("len_avg_ctr"))
-rt_ea_model <- list()
-acc_ea_model <- list()
+ea_rt_model <- list()
+ea_acc_model <- list()
 
 for (i in 1:3) {
   this_var <- ea_vars[[i]]
-  rt_ea_model[[i]] <- lmer((-1000 / rt) ~ (condition * eval(this_var)) + (1|item_no) + (1|participant),
-                           data = ea_df_correct, na.action = na.exclude,
+  ea_rt_model[[i]] <- lmer((-1000 / rt) ~ (condition * eval(this_var)) + (1|item_no) + (1|participant),
+                           data = ea_data_df_correct, na.action = na.exclude,
                            control = lmerControl(check.conv.singular = .makeCC(action = "ignore", tol = 1e-4)))
-  acc_ea_model[[i]] <- glmer((1 - correct) ~ (condition * eval(this_var)) + (1|item_no) + (1|participant),
-                             data = ea_df_ungram, family = 'binomial',
+  ea_acc_model[[i]] <- glmer((1 - correct) ~ (condition * eval(this_var)) + (1|item_no) + (1|participant),
+                             data = ea_data_df_ungram, family = 'binomial',
                              control = glmerControl(check.conv.singular = 
                                                       .makeCC(action = "ignore", tol = 1e-4)))
-  rt_summary_tbl <- as.data.frame(summary(rt_ea_model[[i]])[["coefficients"]]) %>% select(c(1, 2, 3))
-  acc_summary_tbl <- as.data.frame(summary(acc_ea_model[[i]])[["coefficients"]]) %>% select(c(1, 2, 3))
-  this_summary_tbl <- cbind(rt_summary_tbl, acc_summary_tbl)
-  row.names(this_summary_tbl) <- c("(Intercept)", "Condition", ea_names[i], "Interaction")
-  print(kable(this_summary_tbl) %>%
+  ea_rt_summary_tbl <- as.data.frame(summary(ea_rt_model[[i]])[["coefficients"]]) %>% select(c(1:3))
+  ea_acc_summary_tbl <- as.data.frame(summary(ea_acc_model[[i]])[["coefficients"]]) %>% select(c(1:3))
+  ea_this_summary_tbl <- cbind(ea_rt_summary_tbl, ea_acc_summary_tbl)
+  row.names(ea_this_summary_tbl) <- c("(Intercept)", "Condition", ea_names[i], "Interaction")
+  print(kable(ea_this_summary_tbl) %>%
           kable_styling() %>%
           add_header_above(c(" " = 1, "RT" = 3, "Error rate" = 3)))
   cat("\n")
