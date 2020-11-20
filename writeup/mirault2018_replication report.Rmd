@@ -110,8 +110,8 @@ orig_data_df_filtered <- orig_data_df %>%
 
 After pre-processing the data, I noticed that the authors should have excluded one participant based on their exclusion criterion (mean RT > 2.5 standard deviations from mean); however, it was unclear whether this participant was or was not excluded. I thus attempted to reproduce the original findings and run a power analysis on both the excluded and unexcluded data.
 
-```{r "reproduction", warning=F}
-keyEffects <- function(data_df) {
+```{r "reproduction", warning=F, results="asis"}
+keyEffects <- function(data_df, caption_text) {
   ## note: the implementation of this function was modified slightly from the pre-registered version to
   ##       rectify an error in the code
   
@@ -128,7 +128,9 @@ keyEffects <- function(data_df) {
                    data = data_df_correct, na.action = na.exclude,
                    control = lmerControl(check.conv.singular = .makeCC(action = "ignore", tol = 1e-4)))
   
-  print(summary(rt_model)[["coefficients"]])
+  print(kable(summary(rt_model)[["coefficients"]], 
+              caption = paste("Reaction times model, ", caption_text, sep = "")) %>% 
+          kable_styling())
   cat("\n")
   
   #### Accuracy GLME
@@ -137,17 +139,19 @@ keyEffects <- function(data_df) {
                           control = glmerControl(check.conv.singular = 
                                                    .makeCC(action = "ignore", tol = 1e-4)))
   
-  print(summary(accuracy_model)[["coefficients"]])
+  print(kable(summary(accuracy_model)[["coefficients"]], 
+              caption = paste("Error rates model, ", caption_text, sep = "")) %>% 
+          kable_styling())
   
   return(list(rt_model, accuracy_model))
 }
 
-models_included <- keyEffects(orig_data_df)
-models_excluded <- keyEffects(orig_data_df_filtered)
+models_included <- keyEffects(orig_data_df, "original data (no exclusion)")
+models_excluded <- keyEffects(orig_data_df_filtered, "original data (with exclusion)")
 ```
 
-```{r "power analysis"}
-powerAnalysis <- function(rt_model) {
+```{r "power analysis", warning=F}
+powerAnalysis <- function(rt_model, caption_text) {
   #### Post-hoc power analysis
   power <- powerSim(rt_model, nsim = 200, progress = FALSE)
   print(power)
@@ -165,15 +169,16 @@ powerAnalysis <- function(rt_model) {
     annotate("text", x = 5, y = pwr_levels[1:2] * 100 - 2.5, label = c("80% original", "90% original"), 
              colour = "#555555") +
     annotate("text", x = 5, y = pwr_levels[3] * 100 + 2.7, label = "95% original", colour = "#555555") + 
-    labs(x = "Number of participants", y = "Estimated power by simulation (%)")
+    labs(x = "Number of participants", y = "Estimated power by simulation (%)") + 
+    ggtitle(paste("Power curve of ", caption_text, sep = ""))
   
   plot(pwr_crv_plot)
   
   return(list(power, pwr_crv, pwr_crv_plot))
 }
 
-power_analysis_included <- powerAnalysis(models_included[[1]])
-power_analysis_excluded <- powerAnalysis(models_excluded[[1]])
+power_analysis_included <- powerAnalysis(models_included[[1]], "original data (no exclusion)")
+power_analysis_excluded <- powerAnalysis(models_excluded[[1]], "original data (with exclusion)")
 
 # use these to display relevant info if you do not wish to rerun the simulations
 # print(power_analysis_included[[1]])
@@ -194,32 +199,21 @@ The planned sample size is 25, which can achieve 100% of the power of the origin
 
 <!--All materials - can quote directly from original article - just put the text in quotations and note that this was followed precisely.  Or, quote directly and just point out exceptions to what was described in the original article.-->
 
-As the present replication involves a different language from the original study, new stimuli were created in English according to the specifications of the original study. Pairs of five-word grammatical base sentences were constructed, largely using translated lexical items from the original French, modifying where necessary to avoid semantic oddity, to minimize repetitions of lexical items, and to produce sentences that were amenable to the subsequent manipulations. The last words of each pair were then swapped to produce corresponding pairs of ungrammatical base sentences. Finally, the third and fourth words of each base sentence were transposed to form the test sequences, such that the transposed words were of different grammatical categories. Following the original authors, I will refer to the two conditions as the transposed-word condition (derived from a grammatical base sentence) and the control condition (derived from an ungrammatical base sentence). These are illustrated in Table 1.
-
-<center>
-
-*Table 1.* Examples of base sentences and test sequences
-
-</center>
+As the present replication involves a different language from the original study, new stimuli were created in English according to the specifications of the original study. Pairs of five-word grammatical base sentences were constructed, largely using translated lexical items from the original French, modifying where necessary to avoid semantic oddity, to minimize repetitions of lexical items, and to produce sentences that were amenable to the subsequent manipulations. The last words of each pair were then swapped to produce corresponding pairs of ungrammatical base sentences. Finally, the third and fourth words of each base sentence were transposed to form the test sequences, such that the transposed words were of different grammatical categories. Following the original authors, I will refer to the two conditions as the transposed-word condition (derived from a grammatical base sentence) and the control condition (derived from an ungrammatical base sentence). These are illustrated as follows:
 
 ```{r "table1", echo=FALSE, message=FALSE, warnings=FALSE, results='asis'}
-# table solution taken from https://stackoverflow.com/questions/19997242/simple-manual-rmarkdown-tables-that-look-good-in-html-pdf-and-docx
-
-examples <- "
-| Sequence           | Example                          |
-|--------------------|----------------------------------|
-| Base               |                                  |
-| -  Grammatical     | You should really leave now.     |
-|                    | Her handsome neighbor is moving. |
-| -  Ungrammatical   | You should really leave moving.  |
-|                    | Her handsome neighbor is now.    |
-| Test               |                                  |
-| -  Transposed-word | You should leave really now.     |
-|                    | Her handsome is neighbor moving. |
-| -  Control         | You should leave really moving.  |
-|                    | Her handsome is neighbor now.    |
-"
-cat(examples) 
+example_seqs <- data.frame("Sequence" = c("Base", "- Grammatical", "", "- Ungrammatical", "",
+                                          "Test", "- Transposed-word", "", "- Control", ""),
+                           "Example" = c("", "You should really leave now.", 
+                                         "Her handsome neighbor is moving.",
+                                         "You should really leave moving.",
+                                         "Her handsome neighbor is now.",
+                                         "", "You should leave really now.",
+                                         "Her handsome is neighbor moving.", 
+                                         "You should leave really moving.",
+                                         "Her handsome is neighbor now."))
+kable(example_seqs, caption = "Examples of base sentences and test sequences") %>% 
+  kable_styling()
 ```
 
 The remainder of the stimulus construction followed the original study: 160 ungrammatical test sequences were constructed from 80 grammatical and 80 ungrammatical base sentences. These were distributed into two lists, such that participants only saw half of each type of test sequence, and did not experience "repetition of sequences containing the same words". Additionally, "each participant also saw 80 grammatically correct sentences that were not related in any way to the base sequences used to generate the ungrammatical test sequences." 
@@ -300,10 +294,14 @@ repl_data_dem <- repl_data_df %>%
   mutate(age = as.numeric(sub("({\"age\":\")(\\d\\d)(\",.*)", "\\2", responses, perl = TRUE)),
          gender = sub("(.*\"gender\":\")(.*)(\"})", "\\2", responses, perl = TRUE))
 
-#### Age:
-summary(repl_data_dem$age)
-#### Gender:
-table(repl_data_dem$gender)
+age_tbl <- unclass(summary(repl_data_dem$age)) %>% 
+  kable(col.names = c("Age")) %>% 
+  kable_styling()
+gen_tbl <- table(repl_data_dem$gender) %>% 
+  kable(col.names = c("Gender", "Count")) %>% 
+  kable_styling()
+kables(list(age_tbl, gen_tbl), caption = "Demographic data of replication experiment") %>% 
+  kable_styling()
 ```
 
 #### Differences from pre-data collection methods plan
@@ -363,9 +361,9 @@ repl_data_df_filtered <- repl_data_df %>%
 <!--The analyses as specified in the analysis plan.-->
 An LME was then used to analyse the RT data, and a GLME was used to analyse the accuracy data. 
 
-```{r "confirmatory"}
+```{r "confirmatory", results="asis"}
 ### Confirmatory analysis
-models <- keyEffects(repl_data_df_filtered)
+models <- keyEffects(repl_data_df_filtered, "replication data")
 ```
 
 The original paper found that "participants were significantly slower at classifying transposed-word sequences as being ungrammatical compared with the control sequences, *b* = 0.03, *SE* = 0.00, *t* = 8.57, and they made significantly more errors in the transposed-word condition than in the control condition, *b* = 1.77, *SE* = 0.11, *z* = 15.30." These results demonstrate a similar effect, albeit with slightly smaller *t* and *z* values, which is to be expected due to the smaller number of participants.
@@ -431,14 +429,6 @@ repl_acc_plot <- plot_summary(repl_acc_summary, 1) +
   ggtitle("Replication results") +
   ylim(c(0, 17.5))
 
-orig_title <- ggdraw() +
-  draw_label("Original results", fontface = "bold", x = 0, hjust = 0) +
-  theme(plot.margin = margin(0, 0, 0, 7))
-
-repl_title <- ggdraw() +
-  draw_label("Replication results", fontface = "bold", x = 0, hjust = 0) +
-  theme(plot.margin = margin(0, 0, 0, 7))
-
 #### RT
 plot_grid(orig_rt_plot, repl_rt_plot)
 #### Accuracy
@@ -459,7 +449,7 @@ orig_class <- data.frame("Estimate" = c(0.72, 0.08, 0.07, 0.06),
                          "z value" = c(12.44, 12.23, 0.51, 5.74))
 rownames(orig_class) <- c("(Intercept)", "Condition", "Closed class", "Interaction")
 colnames(orig_class) <- c("Estimate", "Std. Error", "t value", "Estimate", "Std. Error", "z value")
-kable(orig_class) %>%
+kable(orig_class, caption = "Mixed-effects model on original data with effect of word class") %>%
   kable_styling() %>%
   add_header_above(c(" " = 1, "RT" = 3, "Error rate" = 3))
 
@@ -471,7 +461,7 @@ orig_len <- data.frame("Estimate" = c(0.76, 0.11, 0.02, 0.01),
                        "z value" = c(9.78, 8.12, 0.01, 4.59))
 rownames(orig_len) <- c("(Intercept)", "Condition", "Avg length", "Interaction")
 colnames(orig_len) <- c("Estimate", "Std. Error", "t value", "Estimate", "Std. Error", "z value")
-kable(orig_len) %>%
+kable(orig_len, caption = "Mixed-effects model on original data with effect of word length") %>%
   kable_styling() %>%
   add_header_above(c(" " = 1, "RT" = 3, "Error rate" = 3))
 ```
@@ -494,7 +484,7 @@ ea_names <- c("Log freq (ctr)", "Closed class (ctr)", "Avg length (ctr)")
 ea_correl <- as.data.frame(cor(stimuli_filtered))
 rownames(ea_correl) <- ea_names
 colnames(ea_correl) <- ea_names
-kable(ea_correl) %>% kable_styling()
+kable(ea_correl, caption = "Covariate correlation matrix") %>% kable_styling()
 
 ea_data_df <- left_join(repl_data_df_filtered, stimuli_data, by = c("item_no", "condition")) %>%
   filter(group != 0)
@@ -522,7 +512,9 @@ for (i in 1:3) {
   ea_acc_summary_tbl <- as.data.frame(summary(ea_acc_model[[i]])[["coefficients"]]) %>% select(c(1:3))
   ea_this_summary_tbl <- cbind(ea_rt_summary_tbl, ea_acc_summary_tbl)
   row.names(ea_this_summary_tbl) <- c("(Intercept)", "Condition", ea_names[i], "Interaction")
-  print(kable(ea_this_summary_tbl) %>%
+  print(kable(ea_this_summary_tbl, caption = 
+                paste("Mixed-effects model on replication data with effect of ", 
+                      tolower(ea_names[i]), sep = "")) %>%
           kable_styling() %>%
           add_header_above(c(" " = 1, "RT" = 3, "Error rate" = 3)))
   cat("\n")
